@@ -3,7 +3,7 @@ email
 
 [![Build Status](https://travis-ci.org/jordan-wright/email?branch=master)](https://travis-ci.org/jordan-wright/email/latest)
 
-Robust, intuitive email library for Go
+Robust, flexible email library for Go
 
 ### Email for humans
 The ```email``` package is designed to be simple to use, but flexible enough so as not to be restrictive. The goal is to provide an *email interface for humans*.
