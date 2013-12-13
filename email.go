@@ -1,5 +1,5 @@
 //Email is designed to be a package providing an "email interface for humans."
-//Designed to be robust and flexible, the email package will make sending email easy without getting in the way.
+//Designed to be robust and flexible, the email package aims to make sending email easy without getting in the way.
 package email
 
 import (
