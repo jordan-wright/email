@@ -1,6 +1,8 @@
 email
 =====
 
+[![Build Status](https://travis-ci.org/jordan-wright/email?branch=master)](https://travis-ci.org/jordan-wright/email/latest)
+
 Robust, intuitive email library for Go
 
 ### Email for humans
