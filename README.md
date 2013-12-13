@@ -1,7 +1,7 @@
 email
 =====
 
-[![Build Status](https://travis-ci.org/jordan-wright/email?branch=master)](https://travis-ci.org/jordan-wright/email/latest)
+[![Build Status](https://travis-ci.org/jordan-wright/email.png?branch=master)](https://travis-ci.org/jordan-wright/email)
 
 Robust, flexible email library for Go
 
