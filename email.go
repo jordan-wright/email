@@ -4,6 +4,7 @@ package email
 
 import (
 	"net/mail"
+	"net/smtp"
 )
 
 //Email is the type used for email messages
@@ -20,7 +21,7 @@ type Email struct {
 }
 
 //Send an email using the given host and SMTP auth (optional)
-func (e Email) Send() {
+func (e Email) Send(addr string, a Auth, e Email) {
 
 }
 
