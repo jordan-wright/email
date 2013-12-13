@@ -3,17 +3,16 @@ email
 
 [![Build Status](https://travis-ci.org/jordan-wright/email.png?branch=master)](https://travis-ci.org/jordan-wright/email)
 
-Robust, flexible email library for Go
+Robust and flexible email library for Go
 
 ### Email for humans
 The ```email``` package is designed to be simple to use, but flexible enough so as not to be restrictive. The goal is to provide an *email interface for humans*.
 
 Plans for the ```email``` package currently include supporting:
-*  To, Bcc, Cc fields
+*  From, To, Bcc, Cc fields
 *  Text and Html Message Body
 *  Attachments
 *  Custom headers
-*  Custom From address
 *  More to come!
 
 ### Installation
