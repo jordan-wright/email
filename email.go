@@ -21,7 +21,7 @@ type Email struct {
 }
 
 //Send an email using the given host and SMTP auth (optional)
-func (e Email) Send(addr string, a Auth, e Email) {
+func (e Email) Send(addr string, a smtp.Auth, e Email) {
 
 }
 
