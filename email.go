@@ -24,6 +24,7 @@ type Email struct {
 	Attachments map[string]*Attachment
 }
 
+//NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
 	return &Email{Attachments: make(map[string]*Attachment)}
 }
@@ -46,6 +47,7 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 	return e.Attachments[filename], nil
 }
 
+//Bytes converts the Email object to a []byte representation of it, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() []byte {
 	return []byte{}
 }
@@ -55,7 +57,7 @@ func (e *Email) Send(addr string, a smtp.Auth) {
 
 }
 
-//Attachment is a struct representing an email attachment
+//Attachment is a struct representing an email attachment.
 //Based on the mime/multipart.FileHeader struct, Attachment contains the name, MIMEHeader, and content of the attachment in question
 type Attachment struct {
 	Filename string
