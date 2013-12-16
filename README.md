@@ -19,6 +19,8 @@ Plans for the ```email``` package currently include supporting:
 ### Installation
 ```go get github.com/jordan-wright/email```
 
+*Note: Requires go version 1.1 and above*
+
 ### Examples
 *Coming Soon*
 
