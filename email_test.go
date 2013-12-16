@@ -6,6 +6,7 @@ import (
 
 func TestEmail(*testing.T) {
 	e := NewEmail()
+	e.From = "Jordan Wright <test@example.com>"
 	e.To = []string{"test@example.com"}
 	e.Bcc = []string{"test_bcc@example.com"}
 	e.Cc = []string{"test_cc@example.com"}

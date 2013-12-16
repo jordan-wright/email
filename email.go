@@ -3,12 +3,16 @@
 package email
 
 import (
+	"bytes"
 	"io/ioutil"
 	"log"
+	"mime"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 //Email is the type used for email messages
@@ -20,13 +24,13 @@ type Email struct {
 	Subject     string
 	Text        string //Plaintext message (optional)
 	Html        string //Html message (optional)
-	Headers     []mail.Header
+	Headers     textproto.MIMEHeader
 	Attachments map[string]*Attachment
 }
 
 //NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
-	return &Email{Attachments: make(map[string]*Attachment)}
+	return &Email{Attachments: make(map[string]*Attachment), Headers: make(textproto.MIMEHeader)}
 }
 
 //Attach is used to attach a file to the email.
@@ -39,25 +43,49 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 		log.Fatal("%s does not exist", filename)
 		return nil, err
 	}
+	//Read the file, and set the appropriate headers
 	buffer, _ := ioutil.ReadFile(filename)
 	e.Attachments[filename] = &Attachment{
 		Filename: filename,
-		Header:   textproto.MIMEHeader{},
+		Header:   make(textproto.MIMEHeader),
 		Content:  buffer}
+	//Get the Content-Type to be used in the MIMEHeader
+	ct := mime.TypeByExtension(filepath.Ext(filename))
+	if ct != "" {
+		e.Attachments[filename].Header.Set("Content-Type", ct)
+	} else {
+		//If the Content-Type is blank, set the Content-Type to "application/octet-stream"
+		e.Attachments[filename].Header.Set("Content-Type", "application/octet-stream")
+	}
 	return e.Attachments[filename], nil
 }
 
 //Bytes converts the Email object to a []byte representation of it, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() []byte {
-	return []byte{}
+	buff := bytes.Buffer{}
+	//w := multipart.NewWriter(&buff)
+	//Set the appropriate headers (overwriting any conflicts)
+	//Leave out Bcc (only included in envelope headers)
+	//TODO: Support wrapping on 76 characters (ref: MIME RFC)
+	e.Headers.Set("To", strings.Join(e.To, ","))
+	e.Headers.Set("Cc", strings.Join(e.Cc, ","))
+	e.Headers.Set("From", e.From)
+	e.Headers.Set("Subject", e.Subject)
+	//Write the envelope headers (including any custom headers)
+
+	return buff.Bytes()
 }
 
-//Send an email using the given host and SMTP auth (optional)
+//Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
 //This function merges the To, Cc, and Bcc fields and calls the smtp.SendMail function using the Email.Bytes() output as the message
 func (e *Email) Send(addr string, a smtp.Auth) error {
 	// Merge the To, Cc, and Bcc fields
 	to := append(append(e.To, e.Cc...), e.Bcc...)
-	return smtp.SendMail(addr, a, e.From, to, e.Bytes())
+	from, err := mail.ParseAddress(e.From)
+	if err != nil {
+		return err
+	}
+	return smtp.SendMail(addr, a, from.Address, to, e.Bytes())
 }
 
 //Attachment is a struct representing an email attachment.

@@ -10,6 +10,7 @@ The ```email``` package is designed to be simple to use, but flexible enough so 
 
 Plans for the ```email``` package currently include supporting:
 *  From, To, Bcc, Cc fields
+*  Email addresses in both "test@example.com" and "First Last <test@example.com>" format
 *  Text and Html Message Body
 *  Attachments
 *  Custom headers
