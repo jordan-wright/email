@@ -4,6 +4,7 @@ package email
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -49,14 +50,16 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 		Filename: filename,
 		Header:   make(textproto.MIMEHeader),
 		Content:  buffer}
+	at := e.Attachments[filename]
 	//Get the Content-Type to be used in the MIMEHeader
 	ct := mime.TypeByExtension(filepath.Ext(filename))
 	if ct != "" {
-		e.Attachments[filename].Header.Set("Content-Type", ct)
+		at.Header.Set("Content-Type", ct)
 	} else {
 		//If the Content-Type is blank, set the Content-Type to "application/octet-stream"
-		e.Attachments[filename].Header.Set("Content-Type", "application/octet-stream")
+		at.Header.Set("Content-Type", "application/octet-stream")
 	}
+	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=%s", filename))
 	return e.Attachments[filename], nil
 }
 
