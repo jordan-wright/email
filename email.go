@@ -78,7 +78,7 @@ func (e *Email) Bytes() []byte {
 	e.Headers.Set("From", e.From)
 	e.Headers.Set("Subject", e.Subject)
 	if len(e.ReadReceipt) != 0 {
-		e.Headers.Set("Disposition-Notification-To", e.ReadReceipt)
+		e.Headers.Set("Disposition-Notification-To", strings.Join(e.ReadReceipt, ","))
 	}
 	e.Headers.Set("MIME-Version", "1.0")
 	e.Headers.Set("Content-Type", fmt.Sprintf("multipart/mixed;\r\nboundary=%s", w.Boundary()))
