@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"mime"
+	"mime/multipart"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -28,6 +29,7 @@ type Email struct {
 	Html        string //Html message (optional)
 	Headers     textproto.MIMEHeader
 	Attachments map[string]*Attachment
+	ReadReceipt []string
 }
 
 //NewEmail creates an Email, and returns the pointer to it.
@@ -67,7 +69,7 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 //Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() []byte {
 	buff := bytes.Buffer{}
-	//w := multipart.NewWriter(&buff)
+	w := multipart.NewWriter(&buff)
 	//Set the appropriate headers (overwriting any conflicts)
 	//Leave out Bcc (only included in envelope headers)
 	//TODO: Support wrapping on 76 characters (ref: MIME RFC)
@@ -75,6 +77,11 @@ func (e *Email) Bytes() []byte {
 	e.Headers.Set("Cc", strings.Join(e.Cc, ","))
 	e.Headers.Set("From", e.From)
 	e.Headers.Set("Subject", e.Subject)
+	if len(e.ReadReceipt) != 0 {
+		e.Headers.Set("Disposition-Notification-To", e.ReadReceipt)
+	}
+	e.Headers.Set("MIME-Version", "1.0")
+	e.Headers.Set("Content-Type", fmt.Sprintf("multipart/mixed;\r\nboundary=%s", w.Boundary()))
 	//Write the envelope headers (including any custom headers)
 	return buff.Bytes()
 }
@@ -83,7 +90,7 @@ func (e *Email) Bytes() []byte {
 //This function merges the To, Cc, and Bcc fields and calls the smtp.SendMail function using the Email.Bytes() output as the message
 func (e *Email) Send(addr string, a smtp.Auth) error {
 	//Check to make sure there is at least one recipient and one "From" address
-	if e.From == "" || len(e.To) == 0 {
+	if e.From == "" || (len(e.To) == 0 || len(e.Cc) == 0 || len(e.Bcc) == 0) {
 		return errors.New("Must specify at least one From address and one To address")
 	}
 	// Merge the To, Cc, and Bcc fields
