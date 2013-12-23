@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -34,7 +35,7 @@ type Email struct {
 
 //NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
-	return &Email{Attachments: make(map[string]*Attachment), Headers: make(textproto.MIMEHeader)}
+	return &Email{Attachments: make(map[string]*Attachment), Headers: textproto.MIMEHeader{}}
 }
 
 //Attach is used to attach a file to the email.
@@ -51,7 +52,7 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 	buffer, _ := ioutil.ReadFile(filename)
 	e.Attachments[filename] = &Attachment{
 		Filename: filename,
-		Header:   make(textproto.MIMEHeader),
+		Header:   textproto.MIMEHeader{},
 		Content:  buffer}
 	at := e.Attachments[filename]
 	//Get the Content-Type to be used in the MIMEHeader
@@ -67,9 +68,9 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 }
 
 //Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
-func (e *Email) Bytes() []byte {
-	buff := bytes.Buffer{}
-	w := multipart.NewWriter(&buff)
+func (e *Email) Bytes() ([]byte, error) {
+	buff := &bytes.Buffer{}
+	w := multipart.NewWriter(buff)
 	//Set the appropriate headers (overwriting any conflicts)
 	//Leave out Bcc (only included in envelope headers)
 	//TODO: Support wrapping on 76 characters (ref: MIME RFC)
@@ -82,8 +83,43 @@ func (e *Email) Bytes() []byte {
 	}
 	e.Headers.Set("MIME-Version", "1.0")
 	e.Headers.Set("Content-Type", fmt.Sprintf("multipart/mixed;\r\nboundary=%s", w.Boundary()))
+
 	//Write the envelope headers (including any custom headers)
-	return buff.Bytes()
+	if err := headerToBytes(buff, e.Headers); err != nil {
+	}
+	header := textproto.MIMEHeader{}
+	//Check to see if there is a Text or HTML field
+	if e.Text != "" || e.Html != "" {
+		altWriter := multipart.NewWriter(buff)
+		//Create the multipart alternative part
+		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\nboundary=%s", altWriter.Boundary()))
+		//Write the header
+		if err := headerToBytes(buff, header); err != nil {
+
+		}
+		//Create the body sections
+		if e.Text != "" {
+			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
+			altWriter.CreatePart(header)
+			// Write the text
+			if err := writeMIME(buff, e.Text); err != nil {
+
+			}
+		}
+		if e.Html != "" {
+			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
+			altWriter.CreatePart(header)
+			// Write the text
+			if err := writeMIME(buff, e.Html); err != nil {
+
+			}
+		}
+	}
+	//Create attachment part, if necessary
+	if e.Attachments != nil {
+
+	}
+	return buff.Bytes(), nil
 }
 
 //Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
@@ -99,7 +135,21 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 	if err != nil {
 		return err
 	}
-	return smtp.SendMail(addr, a, from.Address, to, e.Bytes())
+	raw, err := e.Bytes()
+	if err != nil {
+		return err
+	}
+	return smtp.SendMail(addr, a, from.Address, to, raw)
+}
+
+//writeMIME writes the quoted-printable text to the IO Writer
+func writeMIME(w io.Writer, t string) error {
+	return nil
+}
+
+//headerToBytes enumerates the key and values in the header, and writes the results to the IO Writer
+func headerToBytes(w io.Writer, t textproto.MIMEHeader) error {
+	return nil
 }
 
 //Attachment is a struct representing an email attachment.

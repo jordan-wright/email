@@ -9,7 +9,7 @@ Robust and flexible email library for Go
 The ```email``` package is designed to be simple to use, but flexible enough so as not to be restrictive. The goal is to provide an *email interface for humans*.
 
 Plans for the ```email``` package currently include supporting:
-*  From, To, Bcc, Cc fields
+*  From, To, Bcc, and Cc fields
 *  Email addresses in both "test@example.com" and "First Last &lt;test@example.com&gt;" format
 *  Text and Html Message Body
 *  Attachments
@@ -33,7 +33,7 @@ e.Cc = []string{"test_cc@example.com"}
 e.Subject = "Awesome Subject"
 e.Text = "Text Body is, of course, supported!"
 e.Html = "<h1>Fancy Html is supported, too!</h1>"
-e.Send("smtp.gmail.com:587", smtp.PlainAuth("", e.From, "password123", "smtp.gmail.com"))
+e.Send("smtp.gmail.com:587", smtp.PlainAuth("", "test@gmail.com", "password123", "smtp.gmail.com"))
 ```
 
 #### Attaching a File
