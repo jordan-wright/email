@@ -4,6 +4,7 @@ package email
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -64,6 +65,7 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 		at.Header.Set("Content-Type", "application/octet-stream")
 	}
 	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=%s", filename))
+	at.Header.Set("Content-Transfer-Encoding", "base64")
 	return e.Attachments[filename], nil
 }
 
@@ -94,9 +96,9 @@ func (e *Email) Bytes() ([]byte, error) {
 	header := textproto.MIMEHeader{}
 	//Check to see if there is a Text or HTML field
 	if e.Text != "" || e.Html != "" {
-		altWriter := multipart.NewWriter(buff)
+		subWriter := multipart.NewWriter(buff)
 		//Create the multipart alternative part
-		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", altWriter.Boundary()))
+		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
 		//Write the header
 		if err := headerToBytes(buff, header); err != nil {
 
@@ -104,7 +106,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		//Create the body sections
 		if e.Text != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
-			part, err := altWriter.CreatePart(header)
+			part, err := subWriter.CreatePart(header)
 			if err != nil {
 
 			}
@@ -115,16 +117,27 @@ func (e *Email) Bytes() ([]byte, error) {
 		}
 		if e.Html != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
-			altWriter.CreatePart(header)
+			subWriter.CreatePart(header)
 			// Write the text
 			if err := writeMIME(buff, e.Html); err != nil {
 
 			}
 		}
-		altWriter.Close()
+		subWriter.Close()
 	}
 	//Create attachment part, if necessary
 	if e.Attachments != nil {
+		subWriter := multipart.NewWriter(buff)
+		for _, a := range e.Attachments {
+			ap, err := subWriter.CreatePart(a.Header)
+			if err != nil {
+				return nil, err
+			}
+			enc := base64.NewEncoder(base64.StdEncoding, ap)
+			enc.Write(a.Content)
+			enc.Close()
+		}
+		subWriter.Close()
 	}
 	w.Close()
 	return buff.Bytes(), nil
