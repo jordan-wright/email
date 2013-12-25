@@ -75,7 +75,9 @@ func (e *Email) Bytes() ([]byte, error) {
 	//Leave out Bcc (only included in envelope headers)
 	//TODO: Support wrapping on 76 characters (ref: MIME RFC)
 	e.Headers.Set("To", strings.Join(e.To, ","))
-	e.Headers.Set("Cc", strings.Join(e.Cc, ","))
+	if e.Cc != nil {
+		e.Headers.Set("Cc", strings.Join(e.Cc, ","))
+	}
 	e.Headers.Set("From", e.From)
 	e.Headers.Set("Subject", e.Subject)
 	if len(e.ReadReceipt) != 0 {
@@ -117,7 +119,6 @@ func (e *Email) Bytes() ([]byte, error) {
 	}
 	//Create attachment part, if necessary
 	if e.Attachments != nil {
-
 	}
 	return buff.Bytes(), nil
 }
@@ -126,7 +127,7 @@ func (e *Email) Bytes() ([]byte, error) {
 //This function merges the To, Cc, and Bcc fields and calls the smtp.SendMail function using the Email.Bytes() output as the message
 func (e *Email) Send(addr string, a smtp.Auth) error {
 	//Check to make sure there is at least one recipient and one "From" address
-	if e.From == "" || (len(e.To) == 0 || len(e.Cc) == 0 || len(e.Bcc) == 0) {
+	if e.From == "" || (len(e.To) == 0 && len(e.Cc) == 0 && len(e.Bcc) == 0) {
 		return errors.New("Must specify at least one From address and one To address")
 	}
 	// Merge the To, Cc, and Bcc fields
@@ -149,6 +150,20 @@ func writeMIME(w io.Writer, t string) error {
 
 //headerToBytes enumerates the key and values in the header, and writes the results to the IO Writer
 func headerToBytes(w io.Writer, t textproto.MIMEHeader) error {
+	for k, v := range t {
+		//Write the header key
+		_, err := fmt.Fprintf(w, "%s: ", k)
+		if err != nil {
+			return err
+		}
+		//Write each value in the header
+		for _, c := range v {
+			_, err := fmt.Fprintf(w, "%s\r\n", c)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 

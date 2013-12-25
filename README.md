@@ -44,3 +44,6 @@ e.Attach("test.txt")
 
 ### Documentation
 [http://godoc.org/github.com/jordan-wright/email](http://godoc.org/github.com/jordan-wright/email)
+
+### Other Sources
+Sections inspired by the handy [gophermail](https://github.com/jpoehls/gophermail) project.
