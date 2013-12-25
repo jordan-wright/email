@@ -84,17 +84,19 @@ func (e *Email) Bytes() ([]byte, error) {
 		e.Headers.Set("Disposition-Notification-To", strings.Join(e.ReadReceipt, ","))
 	}
 	e.Headers.Set("MIME-Version", "1.0")
-	e.Headers.Set("Content-Type", fmt.Sprintf("multipart/mixed;\r\nboundary=%s", w.Boundary()))
+	e.Headers.Set("Content-Type", fmt.Sprintf("multipart/mixed;\r\n boundary=%s\r\n", w.Boundary()))
 
 	//Write the envelope headers (including any custom headers)
 	if err := headerToBytes(buff, e.Headers); err != nil {
 	}
+	//Start the multipart/mixed part
+	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
 	header := textproto.MIMEHeader{}
 	//Check to see if there is a Text or HTML field
 	if e.Text != "" || e.Html != "" {
 		altWriter := multipart.NewWriter(buff)
 		//Create the multipart alternative part
-		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\nboundary=%s", altWriter.Boundary()))
+		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", altWriter.Boundary()))
 		//Write the header
 		if err := headerToBytes(buff, header); err != nil {
 
@@ -102,9 +104,12 @@ func (e *Email) Bytes() ([]byte, error) {
 		//Create the body sections
 		if e.Text != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
-			altWriter.CreatePart(header)
+			part, err := altWriter.CreatePart(header)
+			if err != nil {
+
+			}
 			// Write the text
-			if err := writeMIME(buff, e.Text); err != nil {
+			if err := writeMIME(part, e.Text); err != nil {
 
 			}
 		}
@@ -116,10 +121,12 @@ func (e *Email) Bytes() ([]byte, error) {
 
 			}
 		}
+		altWriter.Close()
 	}
 	//Create attachment part, if necessary
 	if e.Attachments != nil {
 	}
+	w.Close()
 	return buff.Bytes(), nil
 }
 
@@ -145,6 +152,10 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 
 //writeMIME writes the quoted-printable text to the IO Writer
 func writeMIME(w io.Writer, t string) error {
+	_, err := fmt.Fprintf(w, "%s\r\n", t)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
