@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -46,7 +45,6 @@ func NewEmail() *Email {
 func (e *Email) Attach(filename string) (a *Attachment, err error) {
 	//Check if the file exists, return any error
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		log.Fatal("%s does not exist", filename)
 		return nil, err
 	}
 	//Read the file, and set the appropriate headers
@@ -133,9 +131,8 @@ func (e *Email) Bytes() ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			enc := base64.NewEncoder(base64.StdEncoding, ap)
-			enc.Write(a.Content)
-			enc.Close()
+			//Write the base64Wrapped content to the part
+			base64Wrap(ap, a.Content)
 		}
 		subWriter.Close()
 	}
@@ -164,12 +161,26 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 }
 
 //writeMIME writes the quoted-printable text to the IO Writer
-func writeMIME(w io.Writer, t string) error {
-	_, err := fmt.Fprintf(w, "%s\r\n", t)
+func writeMIME(w io.Writer, s string) error {
+	_, err := fmt.Fprintf(w, "%s\r\n", s)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+//base64Wrap encodeds the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
+//The output is then written to the specified io.Writer
+func base64Wrap(w io.Writer, b []byte) {
+	encoded := base64.StdEncoding.EncodeToString(b)
+	for i := 0; i < len(encoded); i += 76 {
+		//Do we need to print 76 characters, or the rest of the string?
+		if len(encoded)-i < 76 {
+			fmt.Fprintf(w, "%s\r\n", encoded[i:])
+		} else {
+			fmt.Fprintf(w, "%s\r\n", encoded[i:i+76])
+		}
+	}
 }
 
 //headerToBytes enumerates the key and values in the header, and writes the results to the IO Writer
