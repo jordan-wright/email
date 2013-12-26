@@ -62,7 +62,7 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 		//If the Content-Type is blank, set the Content-Type to "application/octet-stream"
 		at.Header.Set("Content-Type", "application/octet-stream")
 	}
-	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=%s", filename))
+	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=\"%s\"", filename))
 	at.Header.Set("Content-Transfer-Encoding", "base64")
 	return e.Attachments[filename], nil
 }
@@ -125,16 +125,14 @@ func (e *Email) Bytes() ([]byte, error) {
 	}
 	//Create attachment part, if necessary
 	if e.Attachments != nil {
-		subWriter := multipart.NewWriter(buff)
 		for _, a := range e.Attachments {
-			ap, err := subWriter.CreatePart(a.Header)
+			ap, err := w.CreatePart(a.Header)
 			if err != nil {
 				return nil, err
 			}
 			//Write the base64Wrapped content to the part
 			base64Wrap(ap, a.Content)
 		}
-		subWriter.Close()
 	}
 	w.Close()
 	return buff.Bytes(), nil
