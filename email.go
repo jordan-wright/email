@@ -160,7 +160,19 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 
 //writeMIME writes the quoted-printable text to the IO Writer
 func writeMIME(w io.Writer, s string) error {
+	// Basic rules (comments to be removed once this function is fully implemented)
+	// * If character is printable, it can be represented AS IS
+	// * Lines must have a max of 76 characters
+	// * Lines must not end with whitespace
+	//		- Rather, append a soft break (=) to the end of the line after the space for preservation
+	// *
 	_, err := fmt.Fprintf(w, "%s\r\n", s)
+	for _, c := range s {
+		// Check if we can just print the character
+		if (c >= '!' && c < '=') || (c >= '>' && c < '~') {
+			return nil
+		}
+	}
 	if err != nil {
 		return err
 	}
