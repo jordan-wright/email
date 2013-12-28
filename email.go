@@ -19,6 +19,10 @@ import (
 	"strings"
 )
 
+const (
+	MAX_LINE_LENGTH = 76 //The maximum line length per RFC 2045
+)
+
 //Email is the type used for email messages
 type Email struct {
 	From        string
@@ -104,20 +108,19 @@ func (e *Email) Bytes() ([]byte, error) {
 		//Create the body sections
 		if e.Text != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
-			part, err := subWriter.CreatePart(header)
+			/*part, err := subWriter.CreatePart(header)
 			if err != nil {
 
-			}
-			// Write the text
-			if err := writeMIME(part, e.Text); err != nil {
-
-			}
+			}*/
+			// Write the text, splitting it into chunks of MAX_LINE_LENGTH
+			//splitStr := lineSplit(e.Text)
 		}
 		if e.Html != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
+			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			subWriter.CreatePart(header)
 			// Write the text
-			if err := writeMIME(buff, e.Html); err != nil {
+			if err := quotePrintEncode(buff, e.Html); err != nil {
 
 			}
 		}
@@ -158,8 +161,24 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 	return smtp.SendMail(addr, a, from.Address, to, raw)
 }
 
-//writeMIME writes the quoted-printable text to the IO Writer
-func writeMIME(w io.Writer, s string) error {
+//Attachment is a struct representing an email attachment.
+//Based on the mime/multipart.FileHeader struct, Attachment contains the name, MIMEHeader, and content of the attachment in question
+type Attachment struct {
+	Filename string
+	Header   textproto.MIMEHeader
+	Content  []byte
+}
+
+//lineSplit splits the given string into lines of 76 characters at the most
+/*func lineSplit(s string) string {
+	for i, c := range s {
+
+	}
+	return ""
+}*/
+
+//quotePrintEncode writes the quoted-printable text to the IO Writer
+func quotePrintEncode(w io.Writer, s string) error {
 	// Basic rules (comments to be removed once this function is fully implemented)
 	// * If character is printable, it can be represented AS IS
 	// * Lines must have a max of 76 characters
@@ -167,11 +186,9 @@ func writeMIME(w io.Writer, s string) error {
 	//		- Rather, append a soft break (=) to the end of the line after the space for preservation
 	// *
 	_, err := fmt.Fprintf(w, "%s\r\n", s)
-	for _, c := range s {
-		// Check if we can just print the character
-		if (c >= '!' && c < '=') || (c >= '>' && c < '~') {
-			return nil
-		}
+	//Split into MAX_LINE_LENGTH chunks, with needed soft breaks
+	for i := 0; i < MAX_LINE_LENGTH; i++ {
+
 	}
 	if err != nil {
 		return err
@@ -197,25 +214,17 @@ func base64Wrap(w io.Writer, b []byte) {
 func headerToBytes(w io.Writer, t textproto.MIMEHeader) error {
 	for k, v := range t {
 		//Write the header key
-		_, err := fmt.Fprintf(w, "%s: ", k)
+		_, err := fmt.Fprintf(w, "%s:", k)
 		if err != nil {
 			return err
 		}
 		//Write each value in the header
 		for _, c := range v {
-			_, err := fmt.Fprintf(w, "%s\r\n", c)
+			_, err := fmt.Fprintf(w, " %s\r\n", c)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	return nil
-}
-
-//Attachment is a struct representing an email attachment.
-//Based on the mime/multipart.FileHeader struct, Attachment contains the name, MIMEHeader, and content of the attachment in question
-type Attachment struct {
-	Filename string
-	Header   textproto.MIMEHeader
-	Content  []byte
 }
