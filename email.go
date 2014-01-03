@@ -169,29 +169,40 @@ type Attachment struct {
 	Content  []byte
 }
 
-//lineSplit splits the given string into lines of 76 characters at the most
-/*func lineSplit(s string) string {
-	for i, c := range s {
-
-	}
-	return ""
-}*/
-
 //quotePrintEncode writes the quoted-printable text to the IO Writer
 func quotePrintEncode(w io.Writer, s string) error {
-	// Basic rules (comments to be removed once this function is fully implemented)
-	// * If character is printable, it can be represented AS IS
-	// * Lines must have a max of 76 characters
-	// * Lines must not end with whitespace
-	//		- Rather, append a soft break (=) to the end of the line after the space for preservation
-	// *
-	_, err := fmt.Fprintf(w, "%s\r\n", s)
-	//Split into MAX_LINE_LENGTH chunks, with needed soft breaks
-	for i := 0; i < MAX_LINE_LENGTH; i++ {
-
-	}
-	if err != nil {
-		return err
+	mc := 0
+	for _, c := range s {
+		//Change these to a switch
+		// If we've reached the line length limit
+		// or we've found a special character whose encoding will surpass the limit
+		//append a soft break
+		if mc == 75 || (!((c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t')) && mc >= 72) {
+			if _, err := fmt.Fprintf(w, "%s%s", "=\r\n", string(c)); err != nil {
+				return err
+			}
+			mc = 0
+			continue
+		}
+		//append the appropriate character
+		if (c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t') {
+			//Printable character
+			if _, err := fmt.Fprintf(w, "%s", string(c)); err != nil {
+				return err
+			}
+			// Reset the counter if we wrote a newline
+			if c == '\n' {
+				mc = 0
+			}
+			mc++
+			continue
+		} else {
+			//non-printable.. encode it (TODO)
+			if _, err := fmt.Fprintf(w, "%s", string(c)); err != nil {
+				return err
+			}
+			mc++
+		}
 	}
 	return nil
 }
