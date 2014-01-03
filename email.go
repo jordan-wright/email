@@ -198,7 +198,7 @@ func quotePrintEncode(w io.Writer, s string) error {
 			continue
 		} else {
 			//non-printable.. encode it (TODO)
-			if _, err := fmt.Fprintf(w, "%s", string(c)); err != nil {
+			if _, err := fmt.Fprintf(w, "%s%X", "=", c); err != nil {
 				return err
 			}
 			mc++
