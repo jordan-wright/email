@@ -168,7 +168,7 @@ type Attachment struct {
 	Content  []byte
 }
 
-//quotePrintEncode writes the quoted-printable text to the IO Writer
+//quotePrintEncode writes the quoted-printable text to the IO Writer (according to RFC 2045)
 func quotePrintEncode(w io.Writer, s string) error {
 	mc := 0
 	for _, c := range s {
@@ -204,6 +204,7 @@ func quotePrintEncode(w io.Writer, s string) error {
 	return nil
 }
 
+//isPrintable returns true if the rune given is "printable" according to RFC 2045, false otherwise
 func isPrintable(c rune) bool {
 	return (c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t')
 }
