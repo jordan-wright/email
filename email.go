@@ -110,7 +110,7 @@ func (e *Email) Bytes() ([]byte, error) {
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			subWriter.CreatePart(header)
 			// Write the text
-			if err := quotePrintEncode(buff, e.Html); err != nil {
+			if err := quotePrintEncode(buff, e.Text); err != nil {
 				return nil, err
 			}
 		}
