@@ -52,7 +52,10 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 		return nil, err
 	}
 	//Read the file, and set the appropriate headers
-	buffer, _ := ioutil.ReadFile(filename)
+	buffer, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
 	e.Attachments[filename] = &Attachment{
 		Filename: filename,
 		Header:   textproto.MIMEHeader{},
@@ -108,7 +111,9 @@ func (e *Email) Bytes() ([]byte, error) {
 		if e.Text != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
-			subWriter.CreatePart(header)
+			if _, err := subWriter.CreatePart(header); err != nil {
+				return nil, err
+			}
 			// Write the text
 			if err := quotePrintEncode(buff, e.Text); err != nil {
 				return nil, err
@@ -117,13 +122,17 @@ func (e *Email) Bytes() ([]byte, error) {
 		if e.Html != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
-			subWriter.CreatePart(header)
+			if _, err := subWriter.CreatePart(header); err != nil {
+				return nil,err
+			}
 			// Write the text
 			if err := quotePrintEncode(buff, e.Html); err != nil {
 				return nil, err
 			}
 		}
-		subWriter.Close()
+		if err := subWriter.Close(); err != nil {
+			return nil,err
+		}
 	}
 	//Create attachment part, if necessary
 	if e.Attachments != nil {
@@ -136,7 +145,9 @@ func (e *Email) Bytes() ([]byte, error) {
 			base64Wrap(ap, a.Content)
 		}
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		return nil,err
+	}
 	return buff.Bytes(), nil
 }
 
