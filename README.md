@@ -11,7 +11,7 @@ The ```email``` package is designed to be simple to use, but flexible enough so 
 The ```email``` package currently supports the following:
 *  From, To, Bcc, and Cc fields
 *  Email addresses in both "test@example.com" and "First Last &lt;test@example.com&gt;" format
-*  Text and Html Message Body
+*  Text and HTML Message Body
 *  Attachments
 *  Read Receipts
 *  Custom headers
@@ -32,7 +32,7 @@ e.Bcc = []string{"test_bcc@example.com"}
 e.Cc = []string{"test_cc@example.com"}
 e.Subject = "Awesome Subject"
 e.Text = "Text Body is, of course, supported!"
-e.Html = "<h1>Fancy Html is supported, too!</h1>"
+e.HTML = "<h1>Fancy HTML is supported, too!</h1>"
 e.Send("smtp.gmail.com:587", smtp.PlainAuth("", "test@gmail.com", "password123", "smtp.gmail.com"))
 ```
 

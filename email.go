@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	MAX_LINE_LENGTH = 76 //The maximum line length per RFC 2045
+	MaxLineLength = 76 //The maximum line length per RFC 2045
 )
 
 //Email is the type used for email messages
@@ -31,7 +31,7 @@ type Email struct {
 	Cc          []string
 	Subject     string
 	Text        string //Plaintext message (optional)
-	Html        string //Html message (optional)
+	HTML        string //HTML message (optional)
 	Headers     textproto.MIMEHeader
 	Attachments map[string]*Attachment
 	ReadReceipt []string
@@ -96,7 +96,7 @@ func (e *Email) Bytes() ([]byte, error) {
 	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
 	header := textproto.MIMEHeader{}
 	//Check to see if there is a Text or HTML field
-	if e.Text != "" || e.Html != "" {
+	if e.Text != "" || e.HTML != "" {
 		subWriter := multipart.NewWriter(buff)
 		//Create the multipart alternative part
 		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
@@ -114,12 +114,12 @@ func (e *Email) Bytes() ([]byte, error) {
 				return nil, err
 			}
 		}
-		if e.Html != "" {
+		if e.HTML != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			subWriter.CreatePart(header)
 			// Write the text
-			if err := quotePrintEncode(buff, e.Html); err != nil {
+			if err := quotePrintEncode(buff, e.HTML); err != nil {
 				return nil, err
 			}
 		}
@@ -173,7 +173,7 @@ func quotePrintEncode(w io.Writer, s string) error {
 	mc := 0
 	for _, c := range s {
 		// Handle the soft break for the EOL, if needed
-		if mc == 75 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > 75) {
+		if mc == MaxLineLength-1 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > MaxLineLength-1) {
 			if _, err := fmt.Fprintf(w, "%s", "=\r\n"); err != nil {
 				return err
 			}
@@ -213,9 +213,9 @@ func isPrintable(c rune) bool {
 //The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
 	encoded := base64.StdEncoding.EncodeToString(b)
-	for i := 0; i < len(encoded); i += 76 {
+	for i := 0; i < len(encoded); i += MaxLineLength {
 		//Do we need to print 76 characters, or the rest of the string?
-		if len(encoded)-i < 76 {
+		if len(encoded)-i < MaxLineLength {
 			fmt.Fprintf(w, "%s\r\n", encoded[i:])
 		} else {
 			fmt.Fprintf(w, "%s\r\n", encoded[i:i+76])
