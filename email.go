@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	MaxLineLength = 76 //The maximum line length per RFC 2045
+	//MaxLineLength is the maximum line length per RFC 2045
+	MaxLineLength = 76
 )
 
 //Email is the type used for email messages
@@ -31,7 +32,7 @@ type Email struct {
 	Cc          []string
 	Subject     string
 	Text        string //Plaintext message (optional)
-	HTML        string //HTML message (optional)
+	HTML        string //Html message (optional)
 	Headers     textproto.MIMEHeader
 	Attachments map[string]*Attachment
 	ReadReceipt []string
@@ -52,7 +53,10 @@ func (e *Email) Attach(filename string) (a *Attachment, err error) {
 		return nil, err
 	}
 	//Read the file, and set the appropriate headers
-	buffer, _ := ioutil.ReadFile(filename)
+	buffer, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
 	e.Attachments[filename] = &Attachment{
 		Filename: filename,
 		Header:   textproto.MIMEHeader{},
@@ -108,7 +112,9 @@ func (e *Email) Bytes() ([]byte, error) {
 		if e.Text != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
-			subWriter.CreatePart(header)
+			if _, err := subWriter.CreatePart(header); err != nil {
+				return nil, err
+			}
 			// Write the text
 			if err := quotePrintEncode(buff, e.Text); err != nil {
 				return nil, err
@@ -117,13 +123,17 @@ func (e *Email) Bytes() ([]byte, error) {
 		if e.HTML != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
-			subWriter.CreatePart(header)
+			if _, err := subWriter.CreatePart(header); err != nil {
+				return nil, err
+			}
 			// Write the text
 			if err := quotePrintEncode(buff, e.HTML); err != nil {
 				return nil, err
 			}
 		}
-		subWriter.Close()
+		if err := subWriter.Close(); err != nil {
+			return nil, err
+		}
 	}
 	//Create attachment part, if necessary
 	if e.Attachments != nil {
@@ -136,7 +146,9 @@ func (e *Email) Bytes() ([]byte, error) {
 			base64Wrap(ap, a.Content)
 		}
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
 	return buff.Bytes(), nil
 }
 
@@ -173,7 +185,7 @@ func quotePrintEncode(w io.Writer, s string) error {
 	mc := 0
 	for _, c := range s {
 		// Handle the soft break for the EOL, if needed
-		if mc == MaxLineLength-1 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > MaxLineLength-1) {
+		if mc == 75 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > 75) {
 			if _, err := fmt.Fprintf(w, "%s", "=\r\n"); err != nil {
 				return err
 			}
@@ -213,9 +225,9 @@ func isPrintable(c rune) bool {
 //The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
 	encoded := base64.StdEncoding.EncodeToString(b)
-	for i := 0; i < len(encoded); i += MaxLineLength {
+	for i := 0; i < len(encoded); i += 76 {
 		//Do we need to print 76 characters, or the rest of the string?
-		if len(encoded)-i < MaxLineLength {
+		if len(encoded)-i < 76 {
 			fmt.Fprintf(w, "%s\r\n", encoded[i:])
 		} else {
 			fmt.Fprintf(w, "%s\r\n", encoded[i:i+76])
