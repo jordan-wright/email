@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	MAX_LINE_LENGTH = 76 //The maximum line length per RFC 2045
+	//MaxLineLength is the maximum line length per RFC 2045
+	MaxLineLength = 76
 )
 
 //Email is the type used for email messages
@@ -31,7 +32,7 @@ type Email struct {
 	Cc          []string
 	Subject     string
 	Text        string //Plaintext message (optional)
-	Html        string //Html message (optional)
+	HTML        string //Html message (optional)
 	Headers     textproto.MIMEHeader
 	Attachments map[string]*Attachment
 	ReadReceipt []string
@@ -99,7 +100,7 @@ func (e *Email) Bytes() ([]byte, error) {
 	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
 	header := textproto.MIMEHeader{}
 	//Check to see if there is a Text or HTML field
-	if e.Text != "" || e.Html != "" {
+	if e.Text != "" || e.HTML != "" {
 		subWriter := multipart.NewWriter(buff)
 		//Create the multipart alternative part
 		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
@@ -119,19 +120,19 @@ func (e *Email) Bytes() ([]byte, error) {
 				return nil, err
 			}
 		}
-		if e.Html != "" {
+		if e.HTML != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			if _, err := subWriter.CreatePart(header); err != nil {
-				return nil,err
+				return nil, err
 			}
 			// Write the text
-			if err := quotePrintEncode(buff, e.Html); err != nil {
+			if err := quotePrintEncode(buff, e.HTML); err != nil {
 				return nil, err
 			}
 		}
 		if err := subWriter.Close(); err != nil {
-			return nil,err
+			return nil, err
 		}
 	}
 	//Create attachment part, if necessary
@@ -146,7 +147,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		}
 	}
 	if err := w.Close(); err != nil {
-		return nil,err
+		return nil, err
 	}
 	return buff.Bytes(), nil
 }

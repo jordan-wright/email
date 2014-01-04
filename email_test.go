@@ -13,7 +13,7 @@ func TestEmail(*testing.T) {
 	e.Cc = []string{"test_cc@example.com"}
 	e.Subject = "Awesome Subject"
 	e.Text = "Text Body is, of course, supported!"
-	e.Html = "<h1>Fancy Html is supported, too!</h1>"
+	e.HTML = "<h1>Fancy Html is supported, too!</h1>"
 }
 
 func ExampleGmail() {
@@ -24,7 +24,7 @@ func ExampleGmail() {
 	e.Cc = []string{"test_cc@example.com"}
 	e.Subject = "Awesome Subject"
 	e.Text = "Text Body is, of course, supported!"
-	e.Html = "<h1>Fancy Html is supported, too!</h1>"
+	e.HTML = "<h1>Fancy Html is supported, too!</h1>"
 	e.Send("smtp.gmail.com:587", smtp.PlainAuth("", e.From, "password123", "smtp.gmail.com"))
 }
 
