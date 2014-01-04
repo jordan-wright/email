@@ -77,7 +77,6 @@ func (e *Email) Bytes() ([]byte, error) {
 	w := multipart.NewWriter(buff)
 	//Set the appropriate headers (overwriting any conflicts)
 	//Leave out Bcc (only included in envelope headers)
-	//TODO: Support wrapping on 76 characters (ref: MIME RFC)
 	e.Headers.Set("To", strings.Join(e.To, ","))
 	if e.Cc != nil {
 		e.Headers.Set("Cc", strings.Join(e.Cc, ","))
@@ -108,12 +107,12 @@ func (e *Email) Bytes() ([]byte, error) {
 		//Create the body sections
 		if e.Text != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
-			/*part, err := subWriter.CreatePart(header)
-			if err != nil {
-
-			}*/
-			// Write the text, splitting it into chunks of MAX_LINE_LENGTH
-			//splitStr := lineSplit(e.Text)
+			header.Set("Content-Transfer-Encoding", "quoted-printable")
+			subWriter.CreatePart(header)
+			// Write the text
+			if err := quotePrintEncode(buff, e.Html); err != nil {
+				return nil, err
+			}
 		}
 		if e.Html != "" {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
@@ -121,7 +120,7 @@ func (e *Email) Bytes() ([]byte, error) {
 			subWriter.CreatePart(header)
 			// Write the text
 			if err := quotePrintEncode(buff, e.Html); err != nil {
-
+				return nil, err
 			}
 		}
 		subWriter.Close()
@@ -173,19 +172,15 @@ type Attachment struct {
 func quotePrintEncode(w io.Writer, s string) error {
 	mc := 0
 	for _, c := range s {
-		//Change these to a switch
-		// If we've reached the line length limit
-		// or we've found a special character whose encoding will surpass the limit
-		//append a soft break
-		if mc == 75 || (!((c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t')) && mc >= 72) {
-			if _, err := fmt.Fprintf(w, "%s%s", "=\r\n", string(c)); err != nil {
+		// Handle the soft break for the EOL, if needed
+		if mc == 75 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > 75) {
+			if _, err := fmt.Fprintf(w, "%s", "=\r\n"); err != nil {
 				return err
 			}
 			mc = 0
-			continue
 		}
 		//append the appropriate character
-		if (c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t') {
+		if isPrintable(c) {
 			//Printable character
 			if _, err := fmt.Fprintf(w, "%s", string(c)); err != nil {
 				return err
@@ -198,13 +193,19 @@ func quotePrintEncode(w io.Writer, s string) error {
 			continue
 		} else {
 			//non-printable.. encode it (TODO)
-			if _, err := fmt.Fprintf(w, "%s%X", "=", c); err != nil {
+			es := fmt.Sprintf("%s%X", "=", c)
+			if _, err := fmt.Fprintf(w, "%s", es); err != nil {
 				return err
 			}
-			mc++
+			//todo - increment correctly
+			mc += len(es)
 		}
 	}
 	return nil
+}
+
+func isPrintable(c rune) bool {
+	return (c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t')
 }
 
 //base64Wrap encodeds the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
