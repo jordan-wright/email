@@ -185,7 +185,7 @@ func quotePrintEncode(w io.Writer, s string) error {
 	mc := 0
 	for _, c := range s {
 		// Handle the soft break for the EOL, if needed
-		if mc == 75 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > 75) {
+		if mc == MaxLineLength-1 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > MaxLineLength-1) {
 			if _, err := fmt.Fprintf(w, "%s", "=\r\n"); err != nil {
 				return err
 			}
@@ -225,12 +225,12 @@ func isPrintable(c rune) bool {
 //The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
 	encoded := base64.StdEncoding.EncodeToString(b)
-	for i := 0; i < len(encoded); i += 76 {
+	for i := 0; i < len(encoded); i += MaxLineLength {
 		//Do we need to print 76 characters, or the rest of the string?
-		if len(encoded)-i < 76 {
+		if len(encoded)-i < MaxLineLength {
 			fmt.Fprintf(w, "%s\r\n", encoded[i:])
 		} else {
-			fmt.Fprintf(w, "%s\r\n", encoded[i:i+76])
+			fmt.Fprintf(w, "%s\r\n", encoded[i:i+MaxLineLength])
 		}
 	}
 }
