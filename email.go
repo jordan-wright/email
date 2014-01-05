@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/mail"
@@ -43,36 +42,48 @@ func NewEmail() *Email {
 	return &Email{Attachments: make(map[string]*Attachment), Headers: textproto.MIMEHeader{}}
 }
 
-//Attach is used to attach a file to the email.
-//It attempts to open the file referenced by filename and, if successful, creates an Attachment.
-//This Attachment is then appended to the slice of Email.Attachments.
-//The function will then return the Attachment for reference, as well as nil for the error, if successful.
-func (e *Email) Attach(filename string) (a *Attachment, err error) {
-	//Check if the file exists, return any error
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return nil, err
-	}
-	//Read the file, and set the appropriate headers
-	buffer, err := ioutil.ReadFile(filename)
+//Attach is used to attach content from an io.Reader to the email.
+//Required parameters include an io.Reader, the desired filename for the attachment, and the Content-Type
+//The function will return the created Attachment for reference, as well as nil for the error, if successful.
+func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, err error) {
+	buffer := new(bytes.Buffer)
+	_, err = buffer.ReadFrom(r)
 	if err != nil {
 		return nil, err
 	}
 	e.Attachments[filename] = &Attachment{
 		Filename: filename,
 		Header:   textproto.MIMEHeader{},
-		Content:  buffer}
+		Content:  buffer.Bytes()}
 	at := e.Attachments[filename]
 	//Get the Content-Type to be used in the MIMEHeader
-	ct := mime.TypeByExtension(filepath.Ext(filename))
-	if ct != "" {
-		at.Header.Set("Content-Type", ct)
+	if c != "" {
+		at.Header.Set("Content-Type", c)
 	} else {
 		//If the Content-Type is blank, set the Content-Type to "application/octet-stream"
 		at.Header.Set("Content-Type", "application/octet-stream")
 	}
 	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=\"%s\"", filename))
 	at.Header.Set("Content-Transfer-Encoding", "base64")
-	return e.Attachments[filename], nil
+	return at, nil
+}
+
+//AttachFile is used to attach content to the email.
+//It attempts to open the file referenced by filename and, if successful, creates an Attachment.
+//This Attachment is then appended to the slice of Email.Attachments.
+//The function will then return the Attachment for reference, as well as nil for the error, if successful.
+func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
+	//Check if the file exists, return any error
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil, err
+	}
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	//Get the Content-Type to be used in the MIMEHeader
+	ct := mime.TypeByExtension(filepath.Ext(filename))
+	return e.Attach(f, filename, ct)
 }
 
 //Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.

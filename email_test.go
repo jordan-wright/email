@@ -30,5 +30,5 @@ func ExampleGmail() {
 
 func ExampleAttach() {
 	e := NewEmail()
-	e.Attach("test.txt")
+	e.AttachFile("test.txt")
 }
