@@ -39,7 +39,7 @@ e.Send("smtp.gmail.com:587", smtp.PlainAuth("", "test@gmail.com", "password123",
 #### Attaching a File
 ```
 e := NewEmail()
-e.Attach("test.txt")
+e.AttachFile("test.txt")
 ```
 
 ### Documentation
