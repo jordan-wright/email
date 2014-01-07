@@ -232,14 +232,23 @@ func isPrintable(c rune) bool {
 // base64Wrap encodeds the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
 // The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
-	encoded := base64.StdEncoding.EncodeToString(b)
-	for i := 0; i < len(encoded); i += MaxLineLength {
-		// Do we need to print 76 characters, or the rest of the string?
-		if len(encoded)-i < MaxLineLength {
-			fmt.Fprintf(w, "%s\r\n", encoded[i:])
-		} else {
-			fmt.Fprintf(w, "%s\r\n", encoded[i:i+MaxLineLength])
-		}
+	// 57 raw bytes per 76-byte base64 line.
+	const maxRaw = 57
+	// Buffer for each line, including trailing CRLF.
+	var buffer [MaxLineLength + len("\r\n")]byte
+	copy(buffer[MaxLineLength:], "\r\n")
+	// Process raw chunks until there's no longer enough to fill a line.
+	for len(b) >= maxRaw {
+		base64.StdEncoding.Encode(buffer[:], b[:maxRaw])
+		w.Write(buffer[:])
+		b = b[maxRaw:]
+	}
+	// Handle the last chunk of bytes.
+	if len(b) > 0 {
+		out := buffer[:base64.StdEncoding.EncodedLen(len(b))]
+		base64.StdEncoding.Encode(out, b)
+		out = append(out, "\r\n"...)
+		w.Write(out)
 	}
 }
 
