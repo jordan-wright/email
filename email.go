@@ -14,6 +14,7 @@ import (
 	"net/smtp"
 	"net/textproto"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -46,10 +47,9 @@ func NewEmail() *Email {
 // Required parameters include an io.Reader, the desired filename for the attachment, and the Content-Type
 // The function will return the created Attachment for reference, as well as nil for the error, if successful.
 func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, err error) {
-	buffer := new(bytes.Buffer)
-	_, err = buffer.ReadFrom(r)
-	if err != nil {
-		return nil, err
+	var buffer bytes.Buffer
+	if _, err = io.Copy(&buffer, r); err != nil {
+		return
 	}
 	e.Attachments[filename] = &Attachment{
 		Filename: filename,
@@ -73,17 +73,13 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 // This Attachment is then appended to the slice of Email.Attachments.
 // The function will then return the Attachment for reference, as well as nil for the error, if successful.
 func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
-	// Check if the file exists, return any error
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return nil, err
-	}
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return
 	}
-	// Get the Content-Type to be used in the MIMEHeader
 	ct := mime.TypeByExtension(filepath.Ext(filename))
-	return e.Attach(f, filename, ct)
+	basename := path.Base(filename)
+	return e.Attach(f, basename, ct)
 }
 
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
