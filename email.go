@@ -166,12 +166,13 @@ func (e *Email) Bytes() ([]byte, error) {
 // Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
 // This function merges the To, Cc, and Bcc fields and calls the smtp.SendMail function using the Email.Bytes() output as the message
 func (e *Email) Send(addr string, a smtp.Auth) error {
+	// Merge the To, Cc, and Bcc fields
+	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
+	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
 	// Check to make sure there is at least one recipient and one "From" address
-	if e.From == "" || (len(e.To) == 0 && len(e.Cc) == 0 && len(e.Bcc) == 0) {
+	if e.From == "" || len(to) == 0 {
 		return errors.New("Must specify at least one From address and one To address")
 	}
-	// Merge the To, Cc, and Bcc fields
-	to := append(append(e.To, e.Cc...), e.Bcc...)
 	from, err := mail.ParseAddress(e.From)
 	if err != nil {
 		return err
