@@ -34,13 +34,13 @@ type Email struct {
 	Text        string // Plaintext message (optional)
 	HTML        string // Html message (optional)
 	Headers     textproto.MIMEHeader
-	Attachments map[string]*Attachment
+	Attachments []*Attachment
 	ReadReceipt []string
 }
 
 // NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
-	return &Email{Attachments: make(map[string]*Attachment), Headers: textproto.MIMEHeader{}}
+	return &Email{Headers: textproto.MIMEHeader{}}
 }
 
 // Attach is used to attach content from an io.Reader to the email.
@@ -51,11 +51,11 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 	if _, err = io.Copy(&buffer, r); err != nil {
 		return
 	}
-	e.Attachments[filename] = &Attachment{
+	at := &Attachment{
 		Filename: filename,
 		Header:   textproto.MIMEHeader{},
-		Content:  buffer.Bytes()}
-	at := e.Attachments[filename]
+		Content:  buffer.Bytes(),
+	}
 	// Get the Content-Type to be used in the MIMEHeader
 	if c != "" {
 		at.Header.Set("Content-Type", c)
@@ -65,6 +65,7 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 	}
 	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=\"%s\"", filename))
 	at.Header.Set("Content-Transfer-Encoding", "base64")
+	e.Attachments = append(e.Attachments, at)
 	return at, nil
 }
 
@@ -143,15 +144,13 @@ func (e *Email) Bytes() ([]byte, error) {
 		}
 	}
 	// Create attachment part, if necessary
-	if e.Attachments != nil {
-		for _, a := range e.Attachments {
-			ap, err := w.CreatePart(a.Header)
-			if err != nil {
-				return nil, err
-			}
-			// Write the base64Wrapped content to the part
-			base64Wrap(ap, a.Content)
+	for _, a := range e.Attachments {
+		ap, err := w.CreatePart(a.Header)
+		if err != nil {
+			return nil, err
 		}
+		// Write the base64Wrapped content to the part
+		base64Wrap(ap, a.Content)
 	}
 	if err := w.Close(); err != nil {
 		return nil, err
