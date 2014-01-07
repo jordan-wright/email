@@ -190,43 +190,60 @@ type Attachment struct {
 
 // quotePrintEncode writes the quoted-printable text to the IO Writer (according to RFC 2045)
 func quotePrintEncode(w io.Writer, s string) error {
+	var buf [3]byte
 	mc := 0
-	for _, c := range s {
-		// Handle the soft break for the EOL, if needed
-		if mc == MaxLineLength-1 || (!isPrintable(c) && mc+len(fmt.Sprintf("%s%X", "=", c)) > MaxLineLength-1) {
-			if _, err := fmt.Fprintf(w, "%s", "=\r\n"); err != nil {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		// We're assuming Unix style text formats as input (LF line break), and
+		// quoted-printble uses CRLF line breaks. (Literal CRs will become
+		// "=0D", but probably shouldn't be there to begin with!)
+		if c == '\n' {
+			io.WriteString(w, "\r\n")
+			mc = 0
+			continue
+		}
+
+		var nextOut []byte
+		if isPrintable(c) {
+			nextOut = append(buf[:0], c)
+		} else {
+			nextOut = buf[:]
+			qpEscape(nextOut, c)
+		}
+
+		// Add a soft line break if the next (encoded) byte would push this line
+		// to or past the limit.
+		if mc+len(nextOut) >= MaxLineLength {
+			if _, err := io.WriteString(w, "=\r\n"); err != nil {
 				return err
 			}
 			mc = 0
 		}
-		// append the appropriate character
-		if isPrintable(c) {
-			// Printable character
-			if _, err := fmt.Fprintf(w, "%s", string(c)); err != nil {
-				return err
-			}
-			// Reset the counter if we wrote a newline
-			if c == '\n' {
-				mc = 0
-			}
-			mc++
-			continue
-		} else {
-			// non-printable.. encode it (TODO)
-			es := fmt.Sprintf("%s%X", "=", c)
-			if _, err := fmt.Fprintf(w, "%s", es); err != nil {
-				return err
-			}
-			// todo - increment correctly
-			mc += len(es)
+
+		if _, err := w.Write(nextOut); err != nil {
+			return err
 		}
+		mc += len(nextOut)
+	}
+	// No trailing end-of-line?? Soft line break, then. TODO: is this sane?
+	if mc > 0 {
+		io.WriteString(w, "=\r\n")
 	}
 	return nil
 }
 
 // isPrintable returns true if the rune given is "printable" according to RFC 2045, false otherwise
-func isPrintable(c rune) bool {
+func isPrintable(c byte) bool {
 	return (c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t')
+}
+
+// qpEscape is a helper function for quotePrintEncode which escapes a
+// non-printable byte. Expects len(dest) == 3.
+func qpEscape(dest []byte, c byte) {
+	const nums = "0123456789ABCDEF"
+	dest[0] = '='
+	dest[1] = nums[(c&0xf0)>>4]
+	dest[2] = nums[(c & 0xf)]
 }
 
 // base64Wrap encodeds the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
