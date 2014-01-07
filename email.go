@@ -103,6 +103,7 @@ func (e *Email) Bytes() ([]byte, error) {
 
 	// Write the envelope headers (including any custom headers)
 	if err := headerToBytes(buff, e.Headers); err != nil {
+		return nil, fmt.Errorf("Failed to render message headers: %s", err)
 	}
 	// Start the multipart/mixed part
 	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
@@ -114,7 +115,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
 		// Write the header
 		if err := headerToBytes(buff, header); err != nil {
-
+			return nil, fmt.Errorf("Failed to render multipart message headers: %s", err)
 		}
 		// Create the body sections
 		if e.Text != "" {
