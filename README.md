@@ -25,7 +25,7 @@ The ```email``` package currently supports the following:
 ### Examples
 #### Sending email using Gmail
 ```
-e := NewEmail()
+e := email.NewEmail()
 e.From = "Jordan Wright <test@gmail.com>"
 e.To = []string{"test@example.com"}
 e.Bcc = []string{"test_bcc@example.com"}
@@ -34,6 +34,19 @@ e.Subject = "Awesome Subject"
 e.Text = "Text Body is, of course, supported!"
 e.HTML = "<h1>Fancy HTML is supported, too!</h1>"
 e.Send("smtp.gmail.com:587", smtp.PlainAuth("", "test@gmail.com", "password123", "smtp.gmail.com"))
+```
+
+#### Another Method for Creating an Email
+You can also create an email directly by creating a struct as follows:
+```
+e := &email.Email {
+	To: []string{"test@example.com"},
+	From: "Jordan Wright <test@gmail.com>",
+	Subject: "Awesome Subject",
+	Text: "Text Body is, of course, supported!",
+	HTML: "<h1>Fancy HTML is supported, too!</h1>",
+	Headers: textproto.MIMEHeader{},
+}
 ```
 
 #### Attaching a File
