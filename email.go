@@ -89,6 +89,10 @@ func (e *Email) Bytes() ([]byte, error) {
 	w := multipart.NewWriter(buff)
 	// Set the appropriate headers (overwriting any conflicts)
 	// Leave out Bcc (only included in envelope headers)
+	if e.Headers == nil {
+		e.Headers = textproto.MIMEHeader{}
+	}
+
 	e.Headers.Set("To", strings.Join(e.To, ","))
 	if e.Cc != nil {
 		e.Headers.Set("Cc", strings.Join(e.Cc, ","))
