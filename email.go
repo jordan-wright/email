@@ -31,8 +31,8 @@ type Email struct {
 	Bcc         []string
 	Cc          []string
 	Subject     string
-	Text        string // Plaintext message (optional)
-	HTML        string // Html message (optional)
+	Text        []byte // Plaintext message (optional)
+	HTML        []byte // Html message (optional)
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
@@ -109,7 +109,7 @@ func (e *Email) Bytes() ([]byte, error) {
 	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
 	header := textproto.MIMEHeader{}
 	// Check to see if there is a Text or HTML field
-	if e.Text != "" || e.HTML != "" {
+	if len(e.Text) > 0 || len(e.HTML) > 0 {
 		subWriter := multipart.NewWriter(buff)
 		// Create the multipart alternative part
 		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
@@ -118,7 +118,7 @@ func (e *Email) Bytes() ([]byte, error) {
 			return nil, fmt.Errorf("Failed to render multipart message headers: %s", err)
 		}
 		// Create the body sections
-		if e.Text != "" {
+		if len(e.Text) > 0 {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			if _, err := subWriter.CreatePart(header); err != nil {
@@ -129,7 +129,7 @@ func (e *Email) Bytes() ([]byte, error) {
 				return nil, err
 			}
 		}
-		if e.HTML != "" {
+		if len(e.HTML) > 0 {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			if _, err := subWriter.CreatePart(header); err != nil {
@@ -189,11 +189,10 @@ type Attachment struct {
 }
 
 // quotePrintEncode writes the quoted-printable text to the IO Writer (according to RFC 2045)
-func quotePrintEncode(w io.Writer, s string) error {
+func quotePrintEncode(w io.Writer, body []byte) error {
 	var buf [3]byte
 	mc := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
+	for _, c := range body {
 		// We're assuming Unix style text formats as input (LF line break), and
 		// quoted-printble uses CRLF line breaks. (Literal CRs will become
 		// "=0D", but probably shouldn't be there to begin with!)

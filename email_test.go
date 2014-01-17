@@ -21,8 +21,8 @@ func TestEmailTextHtmlAttachment(t *testing.T) {
 	e.Bcc = []string{"test_bcc@example.com"}
 	e.Cc = []string{"test_cc@example.com"}
 	e.Subject = "Awesome Subject"
-	e.Text = "Text Body is, of course, supported!\n"
-	e.HTML = "<h1>Fancy Html is supported, too!</h1>\n"
+	e.Text = []byte("Text Body is, of course, supported!\n")
+	e.HTML = []byte("<h1>Fancy Html is supported, too!</h1>\n")
 	e.Attach(bytes.NewBufferString("Rad attachement"), "rad.txt", "text/plain; charset=utf-8")
 
 	raw, err := e.Bytes()
@@ -112,8 +112,8 @@ func ExampleGmail() {
 	e.Bcc = []string{"test_bcc@example.com"}
 	e.Cc = []string{"test_cc@example.com"}
 	e.Subject = "Awesome Subject"
-	e.Text = "Text Body is, of course, supported!"
-	e.HTML = "<h1>Fancy Html is supported, too!</h1>"
+	e.Text = []byte("Text Body is, of course, supported!\n")
+	e.HTML = []byte("<h1>Fancy Html is supported, too!</h1>\n")
 	e.Send("smtp.gmail.com:587", smtp.PlainAuth("", e.From, "password123", "smtp.gmail.com"))
 }
 
@@ -139,35 +139,35 @@ func Test_base64Wrap(t *testing.T) {
 
 func Test_quotedPrintEncode(t *testing.T) {
 	var buf bytes.Buffer
-	text := "Dear reader!\n\n" +
+	text := []byte("Dear reader!\n\n" +
 		"This is a test email to try and capture some of the corner cases that exist within\n" +
 		"the quoted-printable encoding.\n" +
 		"There are some wacky parts like =, and this input assumes UNIX line breaks so\r\n" +
-		"it can come out a little weird.  Also, we need to support unicode so here's a fish: 🐟\n"
-	expected := "Dear reader!\r\n\r\n" +
+		"it can come out a little weird.  Also, we need to support unicode so here's a fish: 🐟\n")
+	expected := []byte("Dear reader!\r\n\r\n" +
 		"This is a test email to try and capture some of the corner cases that exist=\r\n" +
 		" within\r\n" +
 		"the quoted-printable encoding.\r\n" +
 		"There are some wacky parts like =3D, and this input assumes UNIX line break=\r\n" +
 		"s so=0D\r\n" +
 		"it can come out a little weird.  Also, we need to support unicode so here's=\r\n" +
-		" a fish: =F0=9F=90=9F\r\n"
+		" a fish: =F0=9F=90=9F\r\n")
 
 	if err := quotePrintEncode(&buf, text); err != nil {
 		t.Fatal("quotePrintEncode: ", err)
 	}
 
-	if s := buf.String(); s != expected {
-		t.Errorf("quotedPrintEncode generated incorrect results: %#q != %#q", s, expected)
+	if b := buf.Bytes(); !bytes.Equal(b, expected) {
+		t.Errorf("quotedPrintEncode generated incorrect results: %#q != %#q", b, expected)
 	}
 }
 
 func Benchmark_quotedPrintEncode(b *testing.B) {
-	text := "Dear reader!\n\n" +
+	text := []byte("Dear reader!\n\n" +
 		"This is a test email to try and capture some of the corner cases that exist within\n" +
 		"the quoted-printable encoding.\n" +
 		"There are some wacky parts like =, and this input assumes UNIX line breaks so\r\n" +
-		"it can come out a little weird.  Also, we need to support unicode so here's a fish: 🐟\n"
+		"it can come out a little weird.  Also, we need to support unicode so here's a fish: 🐟\n")
 
 	for i := 0; i <= b.N; i++ {
 		if err := quotePrintEncode(ioutil.Discard, text); err != nil {
