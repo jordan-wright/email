@@ -226,8 +226,9 @@ func quotePrintEncode(w io.Writer, body []byte) error {
 		}
 
 		var nextOut []byte
-		if isPrintable(c) {
-			nextOut = append(buf[:0], c)
+		if isPrintable[c] {
+			buf[0] = c
+			nextOut = buf[:1]
 		} else {
 			nextOut = buf[:]
 			qpEscape(nextOut, c)
@@ -254,9 +255,19 @@ func quotePrintEncode(w io.Writer, body []byte) error {
 	return nil
 }
 
-// isPrintable returns true if the rune given is "printable" according to RFC 2045, false otherwise
-func isPrintable(c byte) bool {
-	return (c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t')
+// isPrintable holds true if the byte given is "printable" according to RFC 2045, false otherwise
+var isPrintable [256]bool
+
+func init() {
+	for c := '!'; c <= '<'; c++ {
+		isPrintable[c] = true
+	}
+	for c := '>'; c <= '~'; c++ {
+		isPrintable[c] = true
+	}
+	isPrintable[' '] = true
+	isPrintable['\n'] = true
+	isPrintable['\t'] = true
 }
 
 // qpEscape is a helper function for quotePrintEncode which escapes a
