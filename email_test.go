@@ -1,23 +1,108 @@
 package email
 
 import (
-	"net/smtp"
 	"testing"
 
 	"bytes"
 	"crypto/rand"
+	"io"
 	"io/ioutil"
+	"mime"
+	"mime/multipart"
+	"net/mail"
+	"net/smtp"
+	"os"
 )
 
-func TestEmail(*testing.T) {
+func TestEmailTextHtmlAttachment(t *testing.T) {
 	e := NewEmail()
 	e.From = "Jordan Wright <test@example.com>"
 	e.To = []string{"test@example.com"}
 	e.Bcc = []string{"test_bcc@example.com"}
 	e.Cc = []string{"test_cc@example.com"}
 	e.Subject = "Awesome Subject"
-	e.Text = "Text Body is, of course, supported!"
-	e.HTML = "<h1>Fancy Html is supported, too!</h1>"
+	e.Text = "Text Body is, of course, supported!\n"
+	e.HTML = "<h1>Fancy Html is supported, too!</h1>\n"
+	e.Attach(bytes.NewBufferString("Rad attachement"), "rad.txt", "text/plain; charset=utf-8")
+
+	raw, err := e.Bytes()
+	if err != nil {
+		t.Fatal("Failed to render message: ", e)
+	}
+	ioutil.WriteFile("golden", raw, os.ModePerm)
+
+	msg, err := mail.ReadMessage(bytes.NewBuffer(raw))
+	if err != nil {
+		t.Fatal("Could not parse rendered message: ", err)
+	}
+
+	expectedHeaders := map[string]string{
+		"To":      "test@example.com",
+		"From":    "Jordan Wright <test@example.com>",
+		"Cc":      "test_cc@example.com",
+		"Subject": "Awesome Subject",
+	}
+
+	for header, expected := range expectedHeaders {
+		if val := msg.Header.Get(header); val != expected {
+			t.Errorf("Wrong value for message header %s: %v != %v", header, expected, val)
+		}
+	}
+
+	// Were the right headers set?
+	ct := msg.Header.Get("Content-type")
+	mt, params, err := mime.ParseMediaType(ct)
+	if err != nil {
+		t.Fatal("Content-type header is invalid: ", ct)
+	} else if mt != "multipart/mixed" {
+		t.Fatalf("Content-type expected \"multipart/mixed\", not %v", mt)
+	}
+	b := params["boundary"]
+	if b == "" {
+		t.Fatalf("Invalid or missing boundary parameter: ", b)
+	}
+	if len(params) != 1 {
+		t.Fatal("Unexpected content-type parameters")
+	}
+
+	// Is the generated message parsable?
+	mixed := multipart.NewReader(msg.Body, params["boundary"])
+
+	text, err := mixed.NextPart()
+	if err != nil {
+		t.Fatalf("Could not find text component of email: ", err)
+	}
+
+	// Does the text portion match what we expect?
+	mt, params, err = mime.ParseMediaType(text.Header.Get("Content-type"))
+	if err != nil {
+		t.Fatal("Could not parse message's Content-Type")
+	} else if mt != "multipart/alternative" {
+		t.Fatal("Message missing multipart/alternative")
+	}
+	mpReader := multipart.NewReader(text, params["boundary"])
+	part, err := mpReader.NextPart()
+	if err != nil {
+		t.Fatal("Could not read plain text component of message: ", err)
+	}
+	plainText, err := ioutil.ReadAll(part)
+	if err != nil {
+		t.Fatal("Could not read plain text component of message: ", err)
+	}
+	if !bytes.Equal(plainText, []byte("Text Body is, of course, supported!\r\n")) {
+		t.Fatalf("Plain text is broken: %#q", plainText)
+	}
+
+	// Check attachments.
+	_, err = mixed.NextPart()
+	if err != nil {
+		t.Fatalf("Could not find attachemnt compoenent of email: ", err)
+	}
+
+	if _, err = mixed.NextPart(); err != io.EOF {
+		t.Error("Expected only text and one attachement!")
+	}
+
 }
 
 func ExampleGmail() {
