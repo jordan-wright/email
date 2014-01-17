@@ -83,28 +83,53 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 	return e.Attach(f, basename, ct)
 }
 
+// msgHeaders merges the Email's various fields and custom headers together in a
+// standards complient way to create a MIMEHeader to be used in the resulting
+// message. It does not alter e.Headers.
+//
+// "e"'s fields To, Cc, From, and Subject will be used unless they are present
+// in e.Headers.
+func (e *Email) msgHeaders() textproto.MIMEHeader {
+	res := make(textproto.MIMEHeader, len(e.Headers)+4)
+	if e.Headers != nil {
+		for _, h := range []string{"To", "Cc", "From", "Subject"} {
+			if v, ok := e.Headers[h]; ok {
+				res[h] = v
+			}
+		}
+	}
+	if _, ok := res["To"]; !ok && len(e.To) > 0 {
+		res.Set("To", strings.Join(e.To, ", "))
+	}
+	if _, ok := res["Cc"]; !ok && len(e.Cc) > 0 {
+		res.Set("Cc", strings.Join(e.Cc, ", "))
+	}
+	if _, ok := res["From"]; !ok {
+		res.Set("From", e.From)
+	}
+	if _, ok := res["Subject"]; !ok && e.Subject != "" {
+		res.Set("Subject", e.Subject)
+	}
+	for field, vals := range e.Headers {
+		if _, ok := res[field]; !ok {
+			res[field] = vals
+		}
+	}
+	return res
+}
+
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
-	buff := &bytes.Buffer{}
-	w := multipart.NewWriter(buff)
-	// Set the appropriate headers (overwriting any conflicts)
-	// Leave out Bcc (only included in envelope headers)
-	e.Headers.Set("To", strings.Join(e.To, ","))
-	if e.Cc != nil {
-		e.Headers.Set("Cc", strings.Join(e.Cc, ","))
-	}
-	e.Headers.Set("From", e.From)
-	e.Headers.Set("Subject", e.Subject)
-	if len(e.ReadReceipt) != 0 {
-		e.Headers.Set("Disposition-Notification-To", strings.Join(e.ReadReceipt, ","))
-	}
-	e.Headers.Set("MIME-Version", "1.0")
-	e.Headers.Set("Content-Type", fmt.Sprintf("multipart/mixed;\r\n boundary=%s\r\n", w.Boundary()))
+	// TODO: better guess buffer size
+	buff := bytes.NewBuffer(make([]byte, 0, 4096))
 
-	// Write the envelope headers (including any custom headers)
-	if err := headerToBytes(buff, e.Headers); err != nil {
-		return nil, fmt.Errorf("Failed to render message headers: %s", err)
-	}
+	headers := e.msgHeaders()
+	w := multipart.NewWriter(buff)
+	// TODO: determine the content type based on message/attachement mix.
+	headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
+	headerToBytes(buff, headers)
+	io.WriteString(buff, "\r\n")
+
 	// Start the multipart/mixed part
 	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
 	header := textproto.MIMEHeader{}
@@ -114,9 +139,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		// Create the multipart alternative part
 		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
 		// Write the header
-		if err := headerToBytes(buff, header); err != nil {
-			return nil, fmt.Errorf("Failed to render multipart message headers: %s", err)
-		}
+		headerToBytes(buff, header)
 		// Create the body sections
 		if len(e.Text) > 0 {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
@@ -268,21 +291,16 @@ func base64Wrap(w io.Writer, b []byte) {
 	}
 }
 
-// headerToBytes enumerates the key and values in the header, and writes the results to the IO Writer
-func headerToBytes(w io.Writer, t textproto.MIMEHeader) error {
-	for k, v := range t {
-		// Write the header key
-		_, err := fmt.Fprintf(w, "%s:", k)
-		if err != nil {
-			return err
-		}
-		// Write each value in the header
-		for _, c := range v {
-			_, err := fmt.Fprintf(w, " %s\r\n", c)
-			if err != nil {
-				return err
-			}
+// headerToBytes renders "header" to "buff". If there are multiple values for a
+// field, multiple "Field: value\r\n" lines will be emitted.
+func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
+	for field, vals := range header {
+		for _, subval := range vals {
+			// bytes.Buffer.Write() never returns an error.
+			io.WriteString(buff, field)
+			io.WriteString(buff, ": ")
+			io.WriteString(buff, subval)
+			io.WriteString(buff, "\r\n")
 		}
 	}
-	return nil
 }
