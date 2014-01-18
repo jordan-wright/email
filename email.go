@@ -285,7 +285,7 @@ func base64Wrap(w io.Writer, b []byte) {
 	// 57 raw bytes per 76-byte base64 line.
 	const maxRaw = 57
 	// Buffer for each line, including trailing CRLF.
-	buffer := make([]byte, MaxLineLength + len("\r\n"))
+	buffer := make([]byte, MaxLineLength+len("\r\n"))
 	copy(buffer[MaxLineLength:], "\r\n")
 	// Process raw chunks until there's no longer enough to fill a line.
 	for len(b) >= maxRaw {
