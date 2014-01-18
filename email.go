@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -87,28 +88,33 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 // standards complient way to create a MIMEHeader to be used in the resulting
 // message. It does not alter e.Headers.
 //
-// "e"'s fields To, Cc, From, and Subject will be used unless they are present
-// in e.Headers.
+// "e"'s fields To, Cc, From, Subject will be used unless they are present in
+// e.Headers. Unless set in e.Headers, "Date" will filled with the current time.
 func (e *Email) msgHeaders() textproto.MIMEHeader {
 	res := make(textproto.MIMEHeader, len(e.Headers)+4)
 	if e.Headers != nil {
-		for _, h := range []string{"To", "Cc", "From", "Subject"} {
+		for _, h := range []string{"To", "Cc", "From", "Subject", "Date"} {
 			if v, ok := e.Headers[h]; ok {
 				res[h] = v
 			}
 		}
 	}
+	// Set headers if there are values.
 	if _, ok := res["To"]; !ok && len(e.To) > 0 {
 		res.Set("To", strings.Join(e.To, ", "))
 	}
 	if _, ok := res["Cc"]; !ok && len(e.Cc) > 0 {
 		res.Set("Cc", strings.Join(e.Cc, ", "))
 	}
+	if _, ok := res["Subject"]; !ok && e.Subject != "" {
+		res.Set("Subject", e.Subject)
+	}
+	// Date and From are required headers.
 	if _, ok := res["From"]; !ok {
 		res.Set("From", e.From)
 	}
-	if _, ok := res["Subject"]; !ok && e.Subject != "" {
-		res.Set("Subject", e.Subject)
+	if _, ok := res["Date"]; !ok {
+		res.Set("Date", time.Now().Format(time.RFC1123Z))
 	}
 	for field, vals := range e.Headers {
 		if _, ok := res[field]; !ok {
