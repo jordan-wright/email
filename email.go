@@ -85,7 +85,7 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 }
 
 // msgHeaders merges the Email's various fields and custom headers together in a
-// standards complient way to create a MIMEHeader to be used in the resulting
+// standards compliant way to create a MIMEHeader to be used in the resulting
 // message. It does not alter e.Headers.
 //
 // "e"'s fields To, Cc, From, Subject will be used unless they are present in
@@ -131,7 +131,7 @@ func (e *Email) Bytes() ([]byte, error) {
 
 	headers := e.msgHeaders()
 	w := multipart.NewWriter(buff)
-	// TODO: determine the content type based on message/attachement mix.
+	// TODO: determine the content type based on message/attachment mix.
 	headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
 	headerToBytes(buff, headers)
 	io.WriteString(buff, "\r\n")
@@ -223,7 +223,7 @@ func quotePrintEncode(w io.Writer, body []byte) error {
 	mc := 0
 	for _, c := range body {
 		// We're assuming Unix style text formats as input (LF line break), and
-		// quoted-printble uses CRLF line breaks. (Literal CRs will become
+		// quoted-printable uses CRLF line breaks. (Literal CRs will become
 		// "=0D", but probably shouldn't be there to begin with!)
 		if c == '\n' {
 			io.WriteString(w, "\r\n")
@@ -285,7 +285,7 @@ func qpEscape(dest []byte, c byte) {
 	dest[2] = nums[(c & 0xf)]
 }
 
-// base64Wrap encodeds the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
+// base64Wrap encodes the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
 // The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
 	// 57 raw bytes per 76-byte base64 line.
