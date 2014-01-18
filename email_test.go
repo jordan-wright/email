@@ -29,7 +29,6 @@ func TestEmailTextHtmlAttachment(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to render message: ", e)
 	}
-	ioutil.WriteFile("golden", raw, os.ModePerm)
 
 	msg, err := mail.ReadMessage(bytes.NewBuffer(raw))
 	if err != nil {
