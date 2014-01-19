@@ -11,7 +11,6 @@ import (
 	"mime/multipart"
 	"net/mail"
 	"net/smtp"
-	"os"
 )
 
 func TestEmailTextHtmlAttachment(t *testing.T) {
