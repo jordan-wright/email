@@ -31,8 +31,8 @@ e.To = []string{"test@example.com"}
 e.Bcc = []string{"test_bcc@example.com"}
 e.Cc = []string{"test_cc@example.com"}
 e.Subject = "Awesome Subject"
-e.Text = "Text Body is, of course, supported!"
-e.HTML = "<h1>Fancy HTML is supported, too!</h1>"
+e.Text = []byte("Text Body is, of course, supported!")
+e.HTML = []byte("<h1>Fancy HTML is supported, too!</h1>")
 e.Send("smtp.gmail.com:587", smtp.PlainAuth("", "test@gmail.com", "password123", "smtp.gmail.com"))
 ```
 
@@ -43,8 +43,8 @@ e := &email.Email {
 	To: []string{"test@example.com"},
 	From: "Jordan Wright <test@gmail.com>",
 	Subject: "Awesome Subject",
-	Text: "Text Body is, of course, supported!",
-	HTML: "<h1>Fancy HTML is supported, too!</h1>",
+	Text: []byte("Text Body is, of course, supported!"),
+	HTML: []byte("<h1>Fancy HTML is supported, too!</h1>"),
 	Headers: textproto.MIMEHeader{},
 }
 ```
@@ -60,3 +60,8 @@ e.AttachFile("test.txt")
 
 ### Other Sources
 Sections inspired by the handy [gophermail](https://github.com/jpoehls/gophermail) project.
+
+### Contributors
+I'd like to thank all the [contributors and maintainers](https://github.com/jordan-wright/email/graphs/contributors) of this package.
+
+A special thanks goes out to Jed Denlea [jeddenlea](https://github.com/jeddenlea) for his numerous contributions and optimizations.
