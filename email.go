@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -31,8 +32,8 @@ type Email struct {
 	Bcc         []string
 	Cc          []string
 	Subject     string
-	Text        string // Plaintext message (optional)
-	HTML        string // Html message (optional)
+	Text        []byte // Plaintext message (optional)
+	HTML        []byte // Html message (optional)
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
@@ -83,46 +84,70 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 	return e.Attach(f, basename, ct)
 }
 
+// msgHeaders merges the Email's various fields and custom headers together in a
+// standards compliant way to create a MIMEHeader to be used in the resulting
+// message. It does not alter e.Headers.
+//
+// "e"'s fields To, Cc, From, Subject will be used unless they are present in
+// e.Headers. Unless set in e.Headers, "Date" will filled with the current time.
+func (e *Email) msgHeaders() textproto.MIMEHeader {
+	res := make(textproto.MIMEHeader, len(e.Headers)+4)
+	if e.Headers != nil {
+		for _, h := range []string{"To", "Cc", "From", "Subject", "Date"} {
+			if v, ok := e.Headers[h]; ok {
+				res[h] = v
+			}
+		}
+	}
+	// Set headers if there are values.
+	if _, ok := res["To"]; !ok && len(e.To) > 0 {
+		res.Set("To", strings.Join(e.To, ", "))
+	}
+	if _, ok := res["Cc"]; !ok && len(e.Cc) > 0 {
+		res.Set("Cc", strings.Join(e.Cc, ", "))
+	}
+	if _, ok := res["Subject"]; !ok && e.Subject != "" {
+		res.Set("Subject", e.Subject)
+	}
+	// Date and From are required headers.
+	if _, ok := res["From"]; !ok {
+		res.Set("From", e.From)
+	}
+	if _, ok := res["Date"]; !ok {
+		res.Set("Date", time.Now().Format(time.RFC1123Z))
+	}
+	for field, vals := range e.Headers {
+		if _, ok := res[field]; !ok {
+			res[field] = vals
+		}
+	}
+	return res
+}
+
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
-	buff := &bytes.Buffer{}
+	// TODO: better guess buffer size
+	buff := bytes.NewBuffer(make([]byte, 0, 4096))
+
+	headers := e.msgHeaders()
 	w := multipart.NewWriter(buff)
-	// Set the appropriate headers (overwriting any conflicts)
-	// Leave out Bcc (only included in envelope headers)
-	if e.Headers == nil {
-		e.Headers = textproto.MIMEHeader{}
-	}
+	// TODO: determine the content type based on message/attachment mix.
+	headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
+	headerToBytes(buff, headers)
+	io.WriteString(buff, "\r\n")
 
-	e.Headers.Set("To", strings.Join(e.To, ","))
-	if e.Cc != nil {
-		e.Headers.Set("Cc", strings.Join(e.Cc, ","))
-	}
-	e.Headers.Set("From", e.From)
-	e.Headers.Set("Subject", e.Subject)
-	if len(e.ReadReceipt) != 0 {
-		e.Headers.Set("Disposition-Notification-To", strings.Join(e.ReadReceipt, ","))
-	}
-	e.Headers.Set("MIME-Version", "1.0")
-	e.Headers.Set("Content-Type", fmt.Sprintf("multipart/mixed;\r\n boundary=%s\r\n", w.Boundary()))
-
-	// Write the envelope headers (including any custom headers)
-	if err := headerToBytes(buff, e.Headers); err != nil {
-		return nil, fmt.Errorf("Failed to render message headers: %s", err)
-	}
 	// Start the multipart/mixed part
 	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
 	header := textproto.MIMEHeader{}
 	// Check to see if there is a Text or HTML field
-	if e.Text != "" || e.HTML != "" {
+	if len(e.Text) > 0 || len(e.HTML) > 0 {
 		subWriter := multipart.NewWriter(buff)
 		// Create the multipart alternative part
 		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
 		// Write the header
-		if err := headerToBytes(buff, header); err != nil {
-			return nil, fmt.Errorf("Failed to render multipart message headers: %s", err)
-		}
+		headerToBytes(buff, header)
 		// Create the body sections
-		if e.Text != "" {
+		if len(e.Text) > 0 {
 			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			if _, err := subWriter.CreatePart(header); err != nil {
@@ -133,7 +158,7 @@ func (e *Email) Bytes() ([]byte, error) {
 				return nil, err
 			}
 		}
-		if e.HTML != "" {
+		if len(e.HTML) > 0 {
 			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
 			header.Set("Content-Transfer-Encoding", "quoted-printable")
 			if _, err := subWriter.CreatePart(header); err != nil {
@@ -193,13 +218,12 @@ type Attachment struct {
 }
 
 // quotePrintEncode writes the quoted-printable text to the IO Writer (according to RFC 2045)
-func quotePrintEncode(w io.Writer, s string) error {
+func quotePrintEncode(w io.Writer, body []byte) error {
 	var buf [3]byte
 	mc := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
+	for _, c := range body {
 		// We're assuming Unix style text formats as input (LF line break), and
-		// quoted-printble uses CRLF line breaks. (Literal CRs will become
+		// quoted-printable uses CRLF line breaks. (Literal CRs will become
 		// "=0D", but probably shouldn't be there to begin with!)
 		if c == '\n' {
 			io.WriteString(w, "\r\n")
@@ -208,8 +232,9 @@ func quotePrintEncode(w io.Writer, s string) error {
 		}
 
 		var nextOut []byte
-		if isPrintable(c) {
-			nextOut = append(buf[:0], c)
+		if isPrintable[c] {
+			buf[0] = c
+			nextOut = buf[:1]
 		} else {
 			nextOut = buf[:]
 			qpEscape(nextOut, c)
@@ -236,9 +261,19 @@ func quotePrintEncode(w io.Writer, s string) error {
 	return nil
 }
 
-// isPrintable returns true if the rune given is "printable" according to RFC 2045, false otherwise
-func isPrintable(c byte) bool {
-	return (c >= '!' && c <= '<') || (c >= '>' && c <= '~') || (c == ' ' || c == '\n' || c == '\t')
+// isPrintable holds true if the byte given is "printable" according to RFC 2045, false otherwise
+var isPrintable [256]bool
+
+func init() {
+	for c := '!'; c <= '<'; c++ {
+		isPrintable[c] = true
+	}
+	for c := '>'; c <= '~'; c++ {
+		isPrintable[c] = true
+	}
+	isPrintable[' '] = true
+	isPrintable['\n'] = true
+	isPrintable['\t'] = true
 }
 
 // qpEscape is a helper function for quotePrintEncode which escapes a
@@ -250,18 +285,18 @@ func qpEscape(dest []byte, c byte) {
 	dest[2] = nums[(c & 0xf)]
 }
 
-// base64Wrap encodeds the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
+// base64Wrap encodes the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
 // The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
 	// 57 raw bytes per 76-byte base64 line.
 	const maxRaw = 57
 	// Buffer for each line, including trailing CRLF.
-	var buffer [MaxLineLength + len("\r\n")]byte
+	buffer := make([]byte, MaxLineLength+len("\r\n"))
 	copy(buffer[MaxLineLength:], "\r\n")
 	// Process raw chunks until there's no longer enough to fill a line.
 	for len(b) >= maxRaw {
-		base64.StdEncoding.Encode(buffer[:], b[:maxRaw])
-		w.Write(buffer[:])
+		base64.StdEncoding.Encode(buffer, b[:maxRaw])
+		w.Write(buffer)
 		b = b[maxRaw:]
 	}
 	// Handle the last chunk of bytes.
@@ -273,21 +308,16 @@ func base64Wrap(w io.Writer, b []byte) {
 	}
 }
 
-// headerToBytes enumerates the key and values in the header, and writes the results to the IO Writer
-func headerToBytes(w io.Writer, t textproto.MIMEHeader) error {
-	for k, v := range t {
-		// Write the header key
-		_, err := fmt.Fprintf(w, "%s:", k)
-		if err != nil {
-			return err
-		}
-		// Write each value in the header
-		for _, c := range v {
-			_, err := fmt.Fprintf(w, " %s\r\n", c)
-			if err != nil {
-				return err
-			}
+// headerToBytes renders "header" to "buff". If there are multiple values for a
+// field, multiple "Field: value\r\n" lines will be emitted.
+func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
+	for field, vals := range header {
+		for _, subval := range vals {
+			// bytes.Buffer.Write() never returns an error.
+			io.WriteString(buff, field)
+			io.WriteString(buff, ": ")
+			io.WriteString(buff, subval)
+			io.WriteString(buff, "\r\n")
 		}
 	}
-	return nil
 }
