@@ -14,7 +14,6 @@ import (
 	"net/smtp"
 	"net/textproto"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -80,7 +79,7 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 		return
 	}
 	ct := mime.TypeByExtension(filepath.Ext(filename))
-	basename := path.Base(filename)
+	basename := filepath.Base(filename)
 	return e.Attach(f, basename, ct)
 }
 
