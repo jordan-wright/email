@@ -115,6 +115,9 @@ func (e *Email) msgHeaders() textproto.MIMEHeader {
 	if _, ok := res["Date"]; !ok {
 		res.Set("Date", time.Now().Format(time.RFC1123Z))
 	}
+	if _, ok := res["Mime-Version"]; !ok {
+		res.Set("Mime-Version", "1.0")
+	}
 	for field, vals := range e.Headers {
 		if _, ok := res[field]; !ok {
 			res[field] = vals
