@@ -197,7 +197,10 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
 	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
 	for i := 0; i < len(to); i++ {
-		addr, _ := mail.ParseAddress(to[i])
+		addr, err := mail.ParseAddress(to[i])
+		if err != nil {
+			return err
+		}
 		to[i] = addr.Address
 	}
 	// Check to make sure there is at least one recipient and one "From" address
