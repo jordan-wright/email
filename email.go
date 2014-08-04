@@ -360,3 +360,13 @@ func (e *Email) WithText(text string) *Email {
 	e.Text = []byte(text)
 	return e
 }
+
+func (e *Email) WithHTML(html string) *Email {
+	e.HTML = []byte(html)
+	return e
+}
+
+func (e *Email) WithAttachment(filename string) *Email {
+	e.AttachFile(filename)
+	return e
+}
