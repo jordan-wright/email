@@ -330,3 +330,43 @@ func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
 		}
 	}
 }
+
+func (e *Email) SendFrom(address string) *Email {
+	e.From = address
+	return e
+}
+
+func (e *Email) SendTo(addresses []string) *Email {
+	e.To = addresses
+	return e
+}
+
+func (e *Email) SendCCTo(addresses []string) *Email {
+	e.Cc = addresses
+	return e
+}
+
+func (e *Email) SendBCCTo(addresses []string) *Email {
+	e.Bcc = addresses
+	return e
+}
+
+func (e *Email) WithSubject(subject string) *Email {
+	e.Subject = subject
+	return e
+}
+
+func (e *Email) WithText(text string) *Email {
+	e.Text = []byte(text)
+	return e
+}
+
+func (e *Email) WithHTML(html string) *Email {
+	e.HTML = []byte(html)
+	return e
+}
+
+func (e *Email) WithAttachment(filename string) *Email {
+	e.AttachFile(filename)
+	return e
+}
