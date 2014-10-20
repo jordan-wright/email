@@ -4,12 +4,15 @@ package email
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -217,6 +220,70 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 		return err
 	}
 	return smtp.SendMail(addr, a, from.Address, to, raw)
+}
+
+// send email with ssl(tls) connection,
+// code refer from https://gist.github.com/chrisgillis/10888032
+func (e *Email) SendWithTLS(addr string, auth smtp.Auth) error {
+	host, _, _ := net.SplitHostPort(addr)
+	tlsconfig := &tls.Config{
+		InsecureSkipVerify: true,
+		ServerName:         host,
+	}
+
+	// Here is the key, you need to call tls.Dial instead of smtp.Dial
+	// for smtp servers running on 465 that require an ssl connection
+	// from the very beginning (no starttls)
+	conn, err := tls.Dial("tcp", addr, tlsconfig)
+	if err != nil {
+		return err
+	}
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	if err = c.Auth(auth); err != nil {
+		return err
+	}
+	from, err := mail.ParseAddress(e.From)
+	if err != nil {
+		return err
+	}
+	if err = c.Mail(from.Address); err != nil {
+		return err
+	}
+	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
+	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
+	for i := 0; i < len(to); i++ {
+		addr, err := mail.ParseAddress(to[i])
+		if err != nil {
+			return err
+		}
+		if err = c.Rcpt(addr.Address); err != nil {
+			return err
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	raw, err := e.Bytes()
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(raw)
+	if err != nil {
+		return err
+	}
+	err = w.Close()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return c.Quit()
 }
 
 // Attachment is a struct representing an email attachment.
