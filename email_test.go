@@ -184,3 +184,25 @@ func Benchmark_base64Wrap(b *testing.B) {
 		base64Wrap(ioutil.Discard, file)
 	}
 }
+
+func Test_encodeHeader(t *testing.T) {
+	// Plain ASCII (unchanged).
+	subject := "Plain ASCII email subject, !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+	expected := []byte("Plain ASCII email subject, !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+
+	b := encodeHeader("Subject", subject)
+	if !bytes.Equal(b, expected) {
+		t.Errorf("encodeHeader generated incorrect results: %#q != %#q", b, expected)
+	}
+
+	// UTF-8 ('q' encoded).
+	subject = "UTF-8 email subject. It can contain é, ñ, or £. Long subject headers will be split in multiple lines!"
+	expected = []byte("=?UTF-8?Q?UTF-8_email_subject._It_c?=\r\n" +
+		" =?UTF-8?Q?an_contain_=C3=A9,_=C3=B1,_or_=C2=A3._Lo?=\r\n" +
+		" =?UTF-8?Q?ng_subject_headers_will_be_split_in_multiple_lines!?=")
+
+	b = encodeHeader("Subject", subject)
+	if !bytes.Equal(b, expected) {
+		t.Errorf("encodeHeader generated incorrect results: %#q != %#q", b, expected)
+	}
+}
