@@ -55,6 +55,23 @@ e := NewEmail()
 e.AttachFile("test.txt")
 ```
 
+#### A Pool of Reusable Connections
+```
+(var ch <-chan *email.Email)
+p := email.NewPool(
+	"smtp.gmail.com:587",
+	4,
+	smtp.PlainAuth("", "test@gmail.com", "password123", "smtp.gmail.com"),
+)
+for i := 0; i < 4; i++ {
+	go func() {
+		for e := range ch {
+			p.Send(e, 10 * time.Second)
+		}
+	}
+}
+```
+
 ### Documentation
 [http://godoc.org/github.com/jordan-wright/email](http://godoc.org/github.com/jordan-wright/email)
 

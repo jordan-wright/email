@@ -221,6 +221,9 @@ func (p *Pool) maybeReplace(err error, c *client) {
 	c.Close()
 }
 
+// Send sends an email via a connection pulled from the Pool. The timeout may
+// be <0 to indicate no timeout. Otherwise reaching the timeout will produce
+// ErrTimeout.
 func (p *Pool) Send(e *Email, timeout time.Duration) (err error) {
 	c := p.get(timeout)
 	if c == nil {
