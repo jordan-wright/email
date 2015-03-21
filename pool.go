@@ -53,7 +53,13 @@ func (p *Pool) get(timeout time.Duration) *client {
 		p.makeOne()
 	}
 
-	deadline := time.After(timeout)
+	var deadline <-chan time.Time
+	if timeout < 0 {
+		deadline = nil
+	} else {
+		deadline = time.After(timeout)
+	}
+
 	for {
 		select {
 		case c := <-p.clients:
