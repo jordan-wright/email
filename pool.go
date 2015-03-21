@@ -13,18 +13,24 @@ import (
 )
 
 type Pool struct {
-	addr    string
-	auth    smtp.Auth
-	max     int
-	created int
-	clients chan *client
-	rebuild chan struct{}
-	mut     *sync.Mutex
+	addr         string
+	auth         smtp.Auth
+	max          int
+	created      int
+	clients      chan *client
+	rebuild      chan struct{}
+	mut          *sync.Mutex
+	lastBuildErr *timestampedErr
 }
 
 type client struct {
 	*smtp.Client
 	failCount int
+}
+
+type timestampedErr struct {
+	err error
+	ts  time.Time
 }
 
 const maxFails = 4
@@ -134,6 +140,7 @@ func (p *Pool) makeOne() {
 			if c, err := p.build(); err == nil {
 				p.clients <- c
 			} else {
+				p.lastBuildErr = &timestampedErr{err, time.Now()}
 				p.dec()
 			}
 		}
@@ -215,7 +222,7 @@ func (p *Pool) maybeReplace(err error, c *client) {
 	p.replace(c)
 	return
 
-	shutdown:
+shutdown:
 	p.dec()
 	c.Quit()
 	c.Close()
@@ -223,10 +230,15 @@ func (p *Pool) maybeReplace(err error, c *client) {
 
 // Send sends an email via a connection pulled from the Pool. The timeout may
 // be <0 to indicate no timeout. Otherwise reaching the timeout will produce
-// ErrTimeout.
+// and error building a connection that occurred while we were waiting, or
+// otherwise ErrTimeout.
 func (p *Pool) Send(e *Email, timeout time.Duration) (err error) {
+	start := time.Now()
 	c := p.get(timeout)
 	if c == nil {
+		if p.lastBuildErr != nil && start.Before(p.lastBuildErr.ts) {
+			return p.lastBuildErr.err
+		}
 		return ErrTimeout
 	}
 
