@@ -159,7 +159,7 @@ func (p *Pool) makeOne() {
 	}()
 }
 
-func startTLS(c *smtp.Client, addr string) (bool, error) {
+func startTLS(c *client, addr string) (bool, error) {
 	if ok, _ := c.Extension("STARTTLS"); !ok {
 		return false, nil
 	}
@@ -176,7 +176,7 @@ func startTLS(c *smtp.Client, addr string) (bool, error) {
 	return true, nil
 }
 
-func addAuth(c *smtp.Client, auth smtp.Auth) (bool, error) {
+func addAuth(c *client, auth smtp.Auth) (bool, error) {
 	if ok, _ := c.Extension("AUTH"); !ok {
 		return false, nil
 	}
@@ -189,10 +189,11 @@ func addAuth(c *smtp.Client, auth smtp.Auth) (bool, error) {
 }
 
 func (p *Pool) build() (*client, error) {
-	c, err := smtp.Dial(p.addr)
+	cl, err := smtp.Dial(p.addr)
 	if err != nil {
 		return nil, err
 	}
+	c := &client{cl, 0}
 
 	if _, err := startTLS(c, p.addr); err != nil {
 		c.Close()
@@ -206,7 +207,7 @@ func (p *Pool) build() (*client, error) {
 		}
 	}
 
-	return &client{c, 0}, nil
+	return c, nil
 }
 
 func (p *Pool) maybeReplace(err error, c *client) {
