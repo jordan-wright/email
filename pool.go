@@ -21,6 +21,7 @@ type Pool struct {
 	rebuild      chan struct{}
 	mut          *sync.Mutex
 	lastBuildErr *timestampedErr
+	closing      chan struct{}
 }
 
 type client struct {
@@ -35,7 +36,10 @@ type timestampedErr struct {
 
 const maxFails = 4
 
-var ErrTimeout = errors.New("timed out")
+var (
+	ErrClosed  = errors.New("pool closed")
+	ErrTimeout = errors.New("timed out")
+)
 
 func NewPool(address string, count int, auth smtp.Auth) *Pool {
 	return &Pool{
@@ -44,8 +48,14 @@ func NewPool(address string, count int, auth smtp.Auth) *Pool {
 		max:     count,
 		clients: make(chan *client, count),
 		rebuild: make(chan struct{}),
+		closing: make(chan struct{}),
 		mut:     &sync.Mutex{},
 	}
+}
+
+// go1.1 didn't have this method
+func (c *client) Close() error {
+	return c.Text.Close()
 }
 
 func (p *Pool) get(timeout time.Duration) *client {
@@ -73,6 +83,8 @@ func (p *Pool) get(timeout time.Duration) *client {
 		case <-p.rebuild:
 			p.makeOne()
 		case <-deadline:
+			return nil
+		case <-p.closing:
 			return nil
 		}
 	}
@@ -183,14 +195,12 @@ func (p *Pool) build() (*client, error) {
 	}
 
 	if _, err := startTLS(c, p.addr); err != nil {
-		c.Quit()
 		c.Close()
 		return nil, err
 	}
 
 	if p.auth != nil {
 		if _, err := addAuth(c, p.auth); err != nil {
-			c.Quit()
 			c.Close()
 			return nil, err
 		}
@@ -224,8 +234,21 @@ func (p *Pool) maybeReplace(err error, c *client) {
 
 shutdown:
 	p.dec()
-	c.Quit()
 	c.Close()
+}
+
+func (p *Pool) failedToGet(startTime time.Time) error {
+	select {
+	case <-p.closing:
+		return ErrClosed
+	default:
+	}
+
+	if p.lastBuildErr != nil && startTime.Before(p.lastBuildErr.ts) {
+		return p.lastBuildErr.err
+	}
+
+	return ErrTimeout
 }
 
 // Send sends an email via a connection pulled from the Pool. The timeout may
@@ -236,10 +259,7 @@ func (p *Pool) Send(e *Email, timeout time.Duration) (err error) {
 	start := time.Now()
 	c := p.get(timeout)
 	if c == nil {
-		if p.lastBuildErr != nil && start.Before(p.lastBuildErr.ts) {
-			return p.lastBuildErr.err
-		}
-		return ErrTimeout
+		return p.failedToGet(start)
 	}
 
 	defer func() {
@@ -309,4 +329,16 @@ func addressLists(lists ...[]string) ([]string, error) {
 	}
 
 	return combined, nil
+}
+
+// Close immediately changes the pool's state so no new connections will be
+// created, then gets and closes the existing ones as they become available.
+func (p *Pool) Close() {
+	close(p.closing)
+
+	for p.created > 0 {
+		c := <-p.clients
+		c.Quit()
+		p.dec()
+	}
 }
