@@ -3,6 +3,7 @@ package email
 import (
 	"crypto/tls"
 	"errors"
+	"io"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -92,6 +93,7 @@ func (p *Pool) get(timeout time.Duration) *client {
 
 func shouldReuse(err error) bool {
 	// certainly not perfect, but might be close:
+	//  - EOF: clearly, the connection went down
 	//  - textproto.Errors were valid SMTP over a valid connection,
 	//    but resulted from an SMTP error response
 	//  - textproto.ProtocolErrors result from connections going down,
@@ -104,6 +106,9 @@ func shouldReuse(err error) bool {
 	// not will eventually hit maxFails.
 	// A false negative will knock over (and trigger replacement of) a
 	// conn that might have still worked.
+	if err == io.EOF {
+		return false
+	}
 	switch err.(type) {
 	case *textproto.Error:
 		return true
