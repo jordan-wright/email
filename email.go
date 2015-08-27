@@ -326,8 +326,68 @@ func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
 			// bytes.Buffer.Write() never returns an error.
 			io.WriteString(buff, field)
 			io.WriteString(buff, ": ")
-			io.WriteString(buff, subval)
+			buff.Write(encodeHeader(field, subval))
 			io.WriteString(buff, "\r\n")
 		}
+	}
+}
+
+// encodeHeader checks whether the header value needs to be encoded, and returns the header-safe byte stream.
+// If the field type is not encodable, or if the string contains only US-ASCII chars, the value is returned as is.
+func encodeHeader(field string, value string) []byte {
+	if field == "Content-Type" || field == "Content-Disposition" {
+		return []byte(value)
+	}
+	ascii := true
+	for i := 0; i < len(value); i++ {
+		if value[i] < ' ' || value[i] > '~' {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return []byte(value)
+	}
+	var b bytes.Buffer
+	encodeText(&b, value, true)
+	return b.Bytes()
+}
+
+// encodeText performs a UTF-8 "Q" encoding on the given string, according to RFC 2047.
+// Output bytes are written to "buff".
+func encodeText(buff *bytes.Buffer, s string, first bool) {
+	// First off, calculate the resulting encoded value's length.
+	encodedLen := 0
+	for i := 0; i < len(s); i++ {
+		if isPrintable[s[i]] {
+			encodedLen++
+		} else {
+			encodedLen = encodedLen + 3 // 1:3 conversion rate for Q encoding.
+		}
+	}
+	encodedLen = encodedLen + 12 // 12 = size of "=?UTF-8?Q?" + "?=
+
+	if encodedLen > MaxLineLength {
+		// Split the text (keeping multi-byte characters together), and recurse.
+		r := []rune(s)
+		encodeText(buff, string(r[:len(r)/2]), first)
+		encodeText(buff, string(r[len(r)/2:]), false)
+	} else {
+		if !first {
+			buff.WriteString("\r\n ")
+		}
+		buff.WriteString("=?UTF-8?Q?")
+
+		for i := 0; i < len(s); i++ {
+			switch c := s[i]; {
+			case c == ' ':
+				buff.WriteByte('_')
+			case isPrintable[c]:
+				buff.WriteByte(c)
+			default:
+				fmt.Fprintf(buff, "=%02X", c)
+			}
+		}
+		buff.WriteString("?=")
 	}
 }
