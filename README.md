@@ -5,6 +5,8 @@ email
 
 Robust and flexible email library for Go
 
+*Note: This library requires Go 1.2 or above*
+
 ### Email for humans
 The ```email``` package is designed to be simple to use, but flexible enough so as not to be restrictive. The goal is to provide an *email interface for humans*.
 
