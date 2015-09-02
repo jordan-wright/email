@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -156,8 +157,12 @@ func (e *Email) Bytes() ([]byte, error) {
 			if _, err := subWriter.CreatePart(header); err != nil {
 				return nil, err
 			}
+			qp := quotedprintable.NewWriter(buff)
 			// Write the text
-			if err := quotePrintEncode(buff, e.Text); err != nil {
+			if _, err := qp.Write(e.Text); err != nil {
+				return nil, err
+			}
+			if err := qp.Close(); err != nil {
 				return nil, err
 			}
 		}
@@ -167,8 +172,12 @@ func (e *Email) Bytes() ([]byte, error) {
 			if _, err := subWriter.CreatePart(header); err != nil {
 				return nil, err
 			}
-			// Write the text
-			if err := quotePrintEncode(buff, e.HTML); err != nil {
+			qp := quotedprintable.NewWriter(buff)
+			// Write the HTML
+			if _, err := qp.Write(e.HTML); err != nil {
+				return nil, err
+			}
+			if err := qp.Close(); err != nil {
 				return nil, err
 			}
 		}
@@ -227,74 +236,6 @@ type Attachment struct {
 	Content  []byte
 }
 
-// quotePrintEncode writes the quoted-printable text to the IO Writer (according to RFC 2045)
-func quotePrintEncode(w io.Writer, body []byte) error {
-	var buf [3]byte
-	mc := 0
-	for _, c := range body {
-		// We're assuming Unix style text formats as input (LF line break), and
-		// quoted-printable uses CRLF line breaks. (Literal CRs will become
-		// "=0D", but probably shouldn't be there to begin with!)
-		if c == '\n' {
-			io.WriteString(w, "\r\n")
-			mc = 0
-			continue
-		}
-
-		var nextOut []byte
-		if isPrintable[c] {
-			buf[0] = c
-			nextOut = buf[:1]
-		} else {
-			nextOut = buf[:]
-			qpEscape(nextOut, c)
-		}
-
-		// Add a soft line break if the next (encoded) byte would push this line
-		// to or past the limit.
-		if mc+len(nextOut) >= MaxLineLength {
-			if _, err := io.WriteString(w, "=\r\n"); err != nil {
-				return err
-			}
-			mc = 0
-		}
-
-		if _, err := w.Write(nextOut); err != nil {
-			return err
-		}
-		mc += len(nextOut)
-	}
-	// No trailing end-of-line?? Soft line break, then. TODO: is this sane?
-	if mc > 0 {
-		io.WriteString(w, "=\r\n")
-	}
-	return nil
-}
-
-// isPrintable holds true if the byte given is "printable" according to RFC 2045, false otherwise
-var isPrintable [256]bool
-
-func init() {
-	for c := '!'; c <= '<'; c++ {
-		isPrintable[c] = true
-	}
-	for c := '>'; c <= '~'; c++ {
-		isPrintable[c] = true
-	}
-	isPrintable[' '] = true
-	isPrintable['\n'] = true
-	isPrintable['\t'] = true
-}
-
-// qpEscape is a helper function for quotePrintEncode which escapes a
-// non-printable byte. Expects len(dest) == 3.
-func qpEscape(dest []byte, c byte) {
-	const nums = "0123456789ABCDEF"
-	dest[0] = '='
-	dest[1] = nums[(c&0xf0)>>4]
-	dest[2] = nums[(c & 0xf)]
-}
-
 // base64Wrap encodes the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
 // The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
@@ -326,68 +267,14 @@ func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
 			// bytes.Buffer.Write() never returns an error.
 			io.WriteString(buff, field)
 			io.WriteString(buff, ": ")
-			buff.Write(encodeHeader(field, subval))
+			// Write the encoded header if needed
+			switch {
+			case field == "Content-Type" || field == "Content-Disposition":
+				buff.Write([]byte(subval))
+			default:
+				buff.Write([]byte(mime.QEncoding.Encode("UTF-8", subval)))
+			}
 			io.WriteString(buff, "\r\n")
 		}
-	}
-}
-
-// encodeHeader checks whether the header value needs to be encoded, and returns the header-safe byte stream.
-// If the field type is not encodable, or if the string contains only US-ASCII chars, the value is returned as is.
-func encodeHeader(field string, value string) []byte {
-	if field == "Content-Type" || field == "Content-Disposition" {
-		return []byte(value)
-	}
-	ascii := true
-	for i := 0; i < len(value); i++ {
-		if value[i] < ' ' || value[i] > '~' {
-			ascii = false
-			break
-		}
-	}
-	if ascii {
-		return []byte(value)
-	}
-	var b bytes.Buffer
-	encodeText(&b, value, true)
-	return b.Bytes()
-}
-
-// encodeText performs a UTF-8 "Q" encoding on the given string, according to RFC 2047.
-// Output bytes are written to "buff".
-func encodeText(buff *bytes.Buffer, s string, first bool) {
-	// First off, calculate the resulting encoded value's length.
-	encodedLen := 0
-	for i := 0; i < len(s); i++ {
-		if isPrintable[s[i]] {
-			encodedLen++
-		} else {
-			encodedLen = encodedLen + 3 // 1:3 conversion rate for Q encoding.
-		}
-	}
-	encodedLen = encodedLen + 12 // 12 = size of "=?UTF-8?Q?" + "?=
-
-	if encodedLen > MaxLineLength {
-		// Split the text (keeping multi-byte characters together), and recurse.
-		r := []rune(s)
-		encodeText(buff, string(r[:len(r)/2]), first)
-		encodeText(buff, string(r[len(r)/2:]), false)
-	} else {
-		if !first {
-			buff.WriteString("\r\n ")
-		}
-		buff.WriteString("=?UTF-8?Q?")
-
-		for i := 0; i < len(s); i++ {
-			switch c := s[i]; {
-			case c == ' ':
-				buff.WriteByte('_')
-			case isPrintable[c]:
-				buff.WriteByte(c)
-			default:
-				fmt.Fprintf(buff, "=%02X", c)
-			}
-		}
-		buff.WriteString("?=")
 	}
 }

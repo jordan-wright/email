@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"mime"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
 )
@@ -135,6 +136,7 @@ func Test_base64Wrap(t *testing.T) {
 	}
 }
 
+// *Since the mime library in use by ```email``` is now in the stdlib, this test is deprecated
 func Test_quotedPrintEncode(t *testing.T) {
 	var buf bytes.Buffer
 	text := []byte("Dear reader!\n\n" +
@@ -147,30 +149,44 @@ func Test_quotedPrintEncode(t *testing.T) {
 		" within\r\n" +
 		"the quoted-printable encoding.\r\n" +
 		"There are some wacky parts like =3D, and this input assumes UNIX line break=\r\n" +
-		"s so=0D\r\n" +
+		"s so\r\n" +
 		"it can come out a little weird.  Also, we need to support unicode so here's=\r\n" +
 		" a fish: =F0=9F=90=9F\r\n")
-
-	if err := quotePrintEncode(&buf, text); err != nil {
+	qp := quotedprintable.NewWriter(&buf)
+	if _, err := qp.Write(text); err != nil {
 		t.Fatal("quotePrintEncode: ", err)
 	}
-
+	if err := qp.Close(); err != nil {
+		t.Fatal("Error closing writer", err)
+	}
 	if b := buf.Bytes(); !bytes.Equal(b, expected) {
 		t.Errorf("quotedPrintEncode generated incorrect results: %#q != %#q", b, expected)
 	}
 }
 
-func Benchmark_quotedPrintEncode(b *testing.B) {
-	text := []byte("Dear reader!\n\n" +
-		"This is a test email to try and capture some of the corner cases that exist within\n" +
-		"the quoted-printable encoding.\n" +
+// *Since the mime library in use by ```email``` is now in the stdlib, this test is deprecated
+func Test_quotedPrintDecode(t *testing.T) {
+	text := []byte("Dear reader!\r\n\r\n" +
+		"This is a test email to try and capture some of the corner cases that exist=\r\n" +
+		" within\r\n" +
+		"the quoted-printable encoding.\r\n" +
+		"There are some wacky parts like =3D, and this input assumes UNIX line break=\r\n" +
+		"s so\r\n" +
+		"it can come out a little weird.  Also, we need to support unicode so here's=\r\n" +
+		" a fish: =F0=9F=90=9F\r\n")
+	expected := []byte("Dear reader!\r\n\r\n" +
+		"This is a test email to try and capture some of the corner cases that exist within\r\n" +
+		"the quoted-printable encoding.\r\n" +
 		"There are some wacky parts like =, and this input assumes UNIX line breaks so\r\n" +
-		"it can come out a little weird.  Also, we need to support unicode so here's a fish: 🐟\n")
+		"it can come out a little weird.  Also, we need to support unicode so here's a fish: 🐟\r\n")
+	qp := quotedprintable.NewReader(bytes.NewReader(text))
+	got, err := ioutil.ReadAll(qp)
+	if err != nil {
+		t.Fatal("quotePrintDecode: ", err)
+	}
 
-	for i := 0; i <= b.N; i++ {
-		if err := quotePrintEncode(ioutil.Discard, text); err != nil {
-			panic(err)
-		}
+	if !bytes.Equal(got, expected) {
+		t.Errorf("quotedPrintDecode generated incorrect results: %#q != %#q", got, expected)
 	}
 }
 
@@ -185,6 +201,7 @@ func Benchmark_base64Wrap(b *testing.B) {
 	}
 }
 
+/*
 func Test_encodeHeader(t *testing.T) {
 	// Plain ASCII (unchanged).
 	subject := "Plain ASCII email subject, !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
@@ -206,3 +223,4 @@ func Test_encodeHeader(t *testing.T) {
 		t.Errorf("encodeHeader generated incorrect results: %#q != %#q", b, expected)
 	}
 }
+*/
