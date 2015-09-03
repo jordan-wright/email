@@ -5,8 +5,6 @@ email
 
 Robust and flexible email library for Go
 
-*Note: This library requires Go 1.2 or above*
-
 ### Email for humans
 The ```email``` package is designed to be simple to use, but flexible enough so as not to be restrictive. The goal is to provide an *email interface for humans*.
 
@@ -22,7 +20,10 @@ The ```email``` package currently supports the following:
 ### Installation
 ```go get github.com/jordan-wright/email```
 
-*Note: Requires go version 1.1 and above*
+*
+Note: Version > 1 of this library requires Go v1.5 or above.
+If you need compatibility with previous Go versions, you can use the previous package at gopkg.in/jordan-wright/email.v1
+*
 
 ### Examples
 #### Sending email using Gmail
