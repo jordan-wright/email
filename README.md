@@ -51,6 +51,9 @@ e := &email.Email {
 }
 ```
 
+#### Creating an Email From an io.Reader
+You can also create an email from any type that implements the ```io.Reader``` interface by using ```email.NewEmailFromReader```.
+
 #### Attaching a File
 ```
 e := NewEmail()
