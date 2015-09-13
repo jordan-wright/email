@@ -3,6 +3,7 @@
 package email
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"errors"
@@ -25,6 +26,12 @@ const (
 	MaxLineLength = 76
 )
 
+// ErrMissingBoundary is returned when there is no boundary given for a multipart entity
+var ErrMissingBoundary = errors.New("No boundary found for multipart entity")
+
+// ErrMissingContentType is returned when there is no "Content-Type" header for a MIME entity
+var ErrMissingContentType = errors.New("No Content-Type found for MIME entity")
+
 // Email is the type used for email messages
 type Email struct {
 	From        string
@@ -39,9 +46,115 @@ type Email struct {
 	ReadReceipt []string
 }
 
+// part is a copyable representation of a multipart.Part
+type part struct {
+	header textproto.MIMEHeader
+	body   []byte
+}
+
 // NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
 	return &Email{Headers: textproto.MIMEHeader{}}
+}
+
+// NewEmailFromReader reads a stream of bytes from an io.Reader, r,
+// and returns an email struct containing the parsed data.
+// This function expects the data in RFC 5322 format.
+func NewEmailFromReader(r io.Reader) (*Email, error) {
+	e := NewEmail()
+	tp := textproto.NewReader(bufio.NewReader(r))
+	// Parse the main headers
+	hdrs, err := tp.ReadMIMEHeader()
+	if err != nil {
+		return e, err
+	}
+	// Set the subject, to, cc, bcc, and from
+	for h, v := range hdrs {
+		switch {
+		case h == "Subject":
+			e.Subject = v[0]
+			delete(hdrs, h)
+		case h == "To":
+			e.To = v
+			delete(hdrs, h)
+		case h == "Cc":
+			e.Cc = v
+			delete(hdrs, h)
+		case h == "Bcc":
+			e.Bcc = v
+			delete(hdrs, h)
+		case h == "From":
+			e.From = v[0]
+			delete(hdrs, h)
+		}
+	}
+	e.Headers = hdrs
+	body := tp.R
+	// Recursively parse the MIME parts
+	ps, err := parseMIMEParts(e.Headers, body)
+	if err != nil {
+		return e, err
+	}
+	for _, p := range ps {
+		if ct := p.header.Get("Content-Type"); ct == "" {
+			return e, ErrMissingContentType
+		}
+		ct, _, err := mime.ParseMediaType(p.header.Get("Content-Type"))
+		if err != nil {
+			return e, err
+		}
+		switch {
+		case ct == "text/plain":
+			e.Text = p.body
+		case ct == "text/html":
+			e.HTML = p.body
+		}
+	}
+	return e, nil
+}
+
+// parseMIMEParts will recursively walk a MIME entity and return a []mime.Part containing
+// each (flattened) mime.Part found.
+// It is important to note that there are no limits to the number of recursions, so be
+// careful when parsing unknown MIME structures!
+func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
+	var ps []*part
+	ct, params, err := mime.ParseMediaType(hs.Get("Content-Type"))
+	if err != nil {
+		return ps, err
+	}
+	if strings.HasPrefix(ct, "multipart/") {
+		if _, ok := params["boundary"]; !ok {
+			return ps, ErrMissingBoundary
+		}
+		mr := multipart.NewReader(b, params["boundary"])
+		for {
+			var buf bytes.Buffer
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return ps, err
+			}
+			subct, _, err := mime.ParseMediaType(p.Header.Get("Content-Type"))
+			if strings.HasPrefix(subct, "multipart/") {
+				sps, err := parseMIMEParts(p.Header, p)
+				if err != nil {
+					return ps, err
+				}
+				ps = append(ps, sps...)
+			} else {
+				// Otherwise, just append the part to the list
+				// Copy the part data into the buffer
+				if _, err := io.Copy(&buf, p); err != nil {
+					return ps, err
+				}
+				ps = append(ps, &part{body: buf.Bytes(), header: p.Header})
+			}
+		}
+	}
+	return ps, nil
 }
 
 // Attach is used to attach content from an io.Reader to the email.

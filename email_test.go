@@ -104,6 +104,54 @@ func TestEmailTextHtmlAttachment(t *testing.T) {
 
 }
 
+func TestEmailFromReader(t *testing.T) {
+	ex := &Email{
+		Subject: "Test Subject",
+		To:      []string{"Jordan Wright <jmwright798@gmail.com>"},
+		From:    "Jordan Wright <jmwright798@gmail.com>",
+		Text:    []byte("This is a test email with HTML Formatting. It also has very long lines so\nthat the content must be wrapped if using quoted-printable decoding.\n"),
+		HTML:    []byte("<div dir=\"ltr\">This is a test email with <b>HTML Formatting.</b>\u00a0It also has very long lines so that the content must be wrapped if using quoted-printable decoding.</div>\n"),
+	}
+	raw := []byte(`MIME-Version: 1.0
+Subject: Test Subject
+From: Jordan Wright <jmwright798@gmail.com>
+To: Jordan Wright <jmwright798@gmail.com>
+Content-Type: multipart/alternative; boundary=001a114fb3fc42fd6b051f834280
+
+--001a114fb3fc42fd6b051f834280
+Content-Type: text/plain; charset=UTF-8
+
+This is a test email with HTML Formatting. It also has very long lines so
+that the content must be wrapped if using quoted-printable decoding.
+
+--001a114fb3fc42fd6b051f834280
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<div dir=3D"ltr">This is a test email with <b>HTML Formatting.</b>=C2=A0It =
+also has very long lines so that the content must be wrapped if using quote=
+d-printable decoding.</div>
+
+--001a114fb3fc42fd6b051f834280--`)
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("Error creating email %s", err.Error())
+	}
+	if e.Subject != ex.Subject {
+		t.Fatalf("Incorrect subject. %#q != %#q", e.Subject, ex.Subject)
+	}
+	if !bytes.Equal(e.Text, ex.Text) {
+		t.Fatalf("Incorrect text: %#q != %#q", e.Text, ex.Text)
+	}
+	if !bytes.Equal(e.HTML, ex.HTML) {
+		t.Fatalf("Incorrect HTML: %#q != %#q", e.HTML, ex.HTML)
+	}
+	if e.From != ex.From {
+		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
+	}
+
+}
+
 func ExampleGmail() {
 	e := NewEmail()
 	e.From = "Jordan Wright <test@gmail.com>"
@@ -200,27 +248,3 @@ func Benchmark_base64Wrap(b *testing.B) {
 		base64Wrap(ioutil.Discard, file)
 	}
 }
-
-/*
-func Test_encodeHeader(t *testing.T) {
-	// Plain ASCII (unchanged).
-	subject := "Plain ASCII email subject, !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-	expected := []byte("Plain ASCII email subject, !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
-
-	b := encodeHeader("Subject", subject)
-	if !bytes.Equal(b, expected) {
-		t.Errorf("encodeHeader generated incorrect results: %#q != %#q", b, expected)
-	}
-
-	// UTF-8 ('q' encoded).
-	subject = "UTF-8 email subject. It can contain é, ñ, or £. Long subject headers will be split in multiple lines!"
-	expected = []byte("=?UTF-8?Q?UTF-8_email_subject._It_c?=\r\n" +
-		" =?UTF-8?Q?an_contain_=C3=A9,_=C3=B1,_or_=C2=A3._Lo?=\r\n" +
-		" =?UTF-8?Q?ng_subject_headers_will_be_split_in_multiple_lines!?=")
-
-	b = encodeHeader("Subject", subject)
-	if !bytes.Equal(b, expected) {
-		t.Errorf("encodeHeader generated incorrect results: %#q != %#q", b, expected)
-	}
-}
-*/
