@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	// MaxLineLength is the maximum line length per RFC 2045
-	MaxLineLength = 76
+	MaxLineLength      = 76                             // MaxLineLength is the maximum line length per RFC 2045
+	defaultContentType = "text/plain; charset=us-ascii" // defaultContentType is the default Content-Type according to RFC 2045, section 5.2
 )
 
 // ErrMissingBoundary is returned when there is no boundary given for a multipart entity
@@ -119,10 +119,15 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 // careful when parsing unknown MIME structures!
 func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 	var ps []*part
+	// If no content type is given, set it to the default
+	if _, ok := hs["Content-Type"]; !ok {
+		hs.Set("Content-Type", defaultContentType)
+	}
 	ct, params, err := mime.ParseMediaType(hs.Get("Content-Type"))
 	if err != nil {
 		return ps, err
 	}
+	// If it's a multipart email, recursively parse the parts
 	if strings.HasPrefix(ct, "multipart/") {
 		if _, ok := params["boundary"]; !ok {
 			return ps, ErrMissingBoundary
@@ -153,6 +158,13 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 				ps = append(ps, &part{body: buf.Bytes(), header: p.Header})
 			}
 		}
+	} else {
+		// If it is not a multipart email, parse the body content as a single "part"
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, b); err != nil {
+			return ps, err
+		}
+		ps = append(ps, &part{body: buf.Bytes(), header: hs})
 	}
 	return ps, nil
 }

@@ -12,6 +12,7 @@ import (
 	"mime/quotedprintable"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 )
 
 func TestEmailTextHtmlAttachment(t *testing.T) {
@@ -150,6 +151,36 @@ d-printable decoding.</div>
 		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
 	}
 
+}
+
+func TestNonMultipartEmailFromReader(t *testing.T) {
+	ex := &Email{
+		Text:    []byte("This is a test message!"),
+		Subject: "Example Subject (no MIME Type)",
+		Headers: textproto.MIMEHeader{},
+	}
+	ex.Headers.Add("Content-Type", "text/plain; charset=us-ascii")
+	ex.Headers.Add("Message-ID", "<foobar@example.com>")
+	raw := []byte(`From: "Foo Bar" <foobar@example.com>
+Content-Type: text/plain
+To: foobar@example.com 
+Subject: Example Subject (no MIME Type)
+Message-ID: <foobar@example.com>
+
+This is a test message!`)
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("Error creating email %s", err.Error())
+	}
+	if ex.Subject != e.Subject {
+		t.Errorf("Incorrect subject. %#q != %#q\n", ex.Subject, e.Subject)
+	}
+	if !bytes.Equal(ex.Text, e.Text) {
+		t.Errorf("Incorrect body. %#q != %#q\n", ex.Text, e.Text)
+	}
+	if ex.Headers.Get("Message-ID") != e.Headers.Get("Message-ID") {
+		t.Errorf("Incorrect message ID. %#q != %#q\n", ex.Headers.Get("Message-ID"), e.Headers.Get("Message-ID"))
+	}
 }
 
 func ExampleGmail() {
