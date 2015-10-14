@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
@@ -219,7 +220,7 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 func (e *Email) msgHeaders() textproto.MIMEHeader {
 	res := make(textproto.MIMEHeader, len(e.Headers)+4)
 	if e.Headers != nil {
-		for _, h := range []string{"To", "Cc", "From", "Subject", "Date"} {
+		for _, h := range []string{"To", "Cc", "From", "Subject", "Date", "Message-Id"} {
 			if v, ok := e.Headers[h]; ok {
 				res[h] = v
 			}
@@ -234,6 +235,9 @@ func (e *Email) msgHeaders() textproto.MIMEHeader {
 	}
 	if _, ok := res["Subject"]; !ok && e.Subject != "" {
 		res.Set("Subject", e.Subject)
+	}
+	if _, ok := res["Message-Id"]; !ok {
+		res.Set("Message-Id", generateMessageID())
 	}
 	// Date and From are required headers.
 	if _, ok := res["From"]; !ok {
@@ -402,4 +406,27 @@ func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
 			io.WriteString(buff, "\r\n")
 		}
 	}
+}
+
+// generateMessageID generates and returns a string suitable for an RFC 2822
+// compliant Message-ID, e.g.:
+// <1444789264909237300.3464.1819418242800517193@DESKTOP01>
+//
+// The following parameters are used to generate a Message-ID:
+// - The nanoseconds since Epoch
+// - The calling PID
+// - A pseudo-random int64
+// - The sending hostname
+func generateMessageID() string {
+	t := time.Now().UnixNano()
+	pid := os.Getpid()
+	r := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	rint := r.Int63()
+	h, err := os.Hostname()
+	// If we can't get the hostname, we'll use localhost
+	if err != nil {
+		h = "localhost.localdomain"
+	}
+	msgid := fmt.Sprintf("<%d.%d.%d@%s>", t, pid, rint, h)
+	return msgid
 }
