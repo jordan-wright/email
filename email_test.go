@@ -287,6 +287,9 @@ Testing!
 	if err != nil {
 		t.Fatalf("Error when parsing email %s", err.Error())
 	}
+	if !bytes.Equal(e.Text, []byte("Testing!")) {
+		t.Fatalf("Error incorrect text: %#q != %#q\n", e.Text, "Testing!")
+	}
 }
 
 // *Since the mime library in use by ```email``` is now in the stdlib, this test is deprecated
