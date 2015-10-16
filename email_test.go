@@ -243,6 +243,52 @@ func Test_quotedPrintEncode(t *testing.T) {
 	}
 }
 
+func TestMultipartNoContentType(t *testing.T) {
+	raw := []byte(`From: Mikhail Gusarov <dottedmag@dottedmag.net>
+To: notmuch@notmuchmail.org
+References: <20091117190054.GU3165@dottiness.seas.harvard.edu>
+Date: Wed, 18 Nov 2009 01:02:38 +0600
+Message-ID: <87iqd9rn3l.fsf@vertex.dottedmag>
+MIME-Version: 1.0
+Subject: Re: [notmuch] Working with Maildir storage?
+Content-Type: multipart/mixed; boundary="===============1958295626=="
+
+--===============1958295626==
+Content-Type: multipart/signed; boundary="=-=-=";
+    micalg=pgp-sha1; protocol="application/pgp-signature"
+
+--=-=-=
+Content-Transfer-Encoding: quoted-printable
+
+Twas brillig at 14:00:54 17.11.2009 UTC-05 when lars@seas.harvard.edu did g=
+yre and gimble:
+
+--=-=-=
+Content-Type: application/pgp-signature
+
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.9 (GNU/Linux)
+
+iQIcBAEBAgAGBQJLAvNOAAoJEJ0g9lA+M4iIjLYQAKp0PXEgl3JMOEBisH52AsIK
+=/ksP
+-----END PGP SIGNATURE-----
+--=-=-=--
+
+--===============1958295626==
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+Testing!
+--===============1958295626==--
+`)
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("Error when parsing email %s", err.Error())
+	}
+}
+
 // *Since the mime library in use by ```email``` is now in the stdlib, this test is deprecated
 func Test_quotedPrintDecode(t *testing.T) {
 	text := []byte("Dear reader!\r\n\r\n" +
