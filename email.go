@@ -5,11 +5,13 @@ package email
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math"
+	"math/big"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
@@ -220,7 +222,7 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 //
 // "e"'s fields To, Cc, From, Subject will be used unless they are present in
 // e.Headers. Unless set in e.Headers, "Date" will filled with the current time.
-func (e *Email) msgHeaders() textproto.MIMEHeader {
+func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 	res := make(textproto.MIMEHeader, len(e.Headers)+4)
 	if e.Headers != nil {
 		for _, h := range []string{"To", "Cc", "From", "Subject", "Date", "Message-Id"} {
@@ -240,7 +242,11 @@ func (e *Email) msgHeaders() textproto.MIMEHeader {
 		res.Set("Subject", e.Subject)
 	}
 	if _, ok := res["Message-Id"]; !ok {
-		res.Set("Message-Id", generateMessageID())
+		id, err := generateMessageID()
+		if err != nil {
+			return nil, err
+		}
+		res.Set("Message-Id", id)
 	}
 	// Date and From are required headers.
 	if _, ok := res["From"]; !ok {
@@ -257,7 +263,7 @@ func (e *Email) msgHeaders() textproto.MIMEHeader {
 			res[field] = vals
 		}
 	}
-	return res
+	return res, nil
 }
 
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
@@ -265,7 +271,10 @@ func (e *Email) Bytes() ([]byte, error) {
 	// TODO: better guess buffer size
 	buff := bytes.NewBuffer(make([]byte, 0, 4096))
 
-	headers := e.msgHeaders()
+	headers, err := e.msgHeaders()
+	if err != nil {
+		return nil, err
+	}
 	w := multipart.NewWriter(buff)
 	// TODO: determine the content type based on message/attachment mix.
 	headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
@@ -411,6 +420,8 @@ func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
 	}
 }
 
+var maxBigInt = big.NewInt(math.MaxInt64)
+
 // generateMessageID generates and returns a string suitable for an RFC 2822
 // compliant Message-ID, e.g.:
 // <1444789264909237300.3464.1819418242800517193@DESKTOP01>
@@ -418,18 +429,20 @@ func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
 // The following parameters are used to generate a Message-ID:
 // - The nanoseconds since Epoch
 // - The calling PID
-// - A pseudo-random int64
+// - A cryptographically random int64
 // - The sending hostname
-func generateMessageID() string {
+func generateMessageID() (string, error) {
 	t := time.Now().UnixNano()
 	pid := os.Getpid()
-	r := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-	rint := r.Int63()
+	rint, err := rand.Int(rand.Reader, maxBigInt)
+	if err != nil {
+		return "", err
+	}
 	h, err := os.Hostname()
 	// If we can't get the hostname, we'll use localhost
 	if err != nil {
 		h = "localhost.localdomain"
 	}
 	msgid := fmt.Sprintf("<%d.%d.%d@%s>", t, pid, rint, h)
-	return msgid
+	return msgid, nil
 }
