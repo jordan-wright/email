@@ -374,7 +374,6 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 // This is helpful if you need to connect to a host that is used an untrusted
 // certificate.
 func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
-	fmt.Println("Sending with T.L.S.")
 	// Merge the To, Cc, and Bcc fields
 	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
 	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
