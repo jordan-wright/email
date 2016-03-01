@@ -113,7 +113,8 @@ func TestEmailFromReader(t *testing.T) {
 		Text:    []byte("This is a test email with HTML Formatting. It also has very long lines so\nthat the content must be wrapped if using quoted-printable decoding.\n"),
 		HTML:    []byte("<div dir=\"ltr\">This is a test email with <b>HTML Formatting.</b>\u00a0It also has very long lines so that the content must be wrapped if using quoted-printable decoding.</div>\n"),
 	}
-	raw := []byte(`MIME-Version: 1.0
+	raw := []byte(`
+	MIME-Version: 1.0
 Subject: Test Subject
 From: Jordan Wright <jmwright798@gmail.com>
 To: Jordan Wright <jmwright798@gmail.com>

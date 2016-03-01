@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -61,12 +62,27 @@ func NewEmail() *Email {
 	return &Email{Headers: textproto.MIMEHeader{}}
 }
 
+// trimReader is a custom io.Reader that will trim any leading
+// whitespace, as this can cause email imports to fail.
+type trimReader struct {
+	rd io.Reader
+}
+
+// Read trims off any unicode whitespace from the originating reader
+func (tr trimReader) Read(buf []byte) (int, error) {
+	n, err := tr.rd.Read(buf)
+	t := bytes.TrimLeftFunc(buf[:n], unicode.IsSpace)
+	n = copy(buf, t)
+	return n, err
+}
+
 // NewEmailFromReader reads a stream of bytes from an io.Reader, r,
 // and returns an email struct containing the parsed data.
 // This function expects the data in RFC 5322 format.
 func NewEmailFromReader(r io.Reader) (*Email, error) {
 	e := NewEmail()
-	tp := textproto.NewReader(bufio.NewReader(r))
+	s := trimReader{rd: r}
+	tp := textproto.NewReader(bufio.NewReader(s))
 	// Parse the main headers
 	hdrs, err := tp.ReadMIMEHeader()
 	if err != nil {
