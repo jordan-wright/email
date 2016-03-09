@@ -30,6 +30,7 @@ type Email struct {
 	To          []string
 	Bcc         []string
 	Cc          []string
+	ReplyTo     string
 	Subject     string
 	Text        []byte // Plaintext message (optional)
 	HTML        []byte // Html message (optional)
@@ -93,7 +94,7 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 func (e *Email) msgHeaders() textproto.MIMEHeader {
 	res := make(textproto.MIMEHeader, len(e.Headers)+4)
 	if e.Headers != nil {
-		for _, h := range []string{"To", "Cc", "From", "Subject", "Date"} {
+		for _, h := range []string{"To", "Cc", "From", "Reply-To", "Subject", "Date"} {
 			if v, ok := e.Headers[h]; ok {
 				res[h] = v
 			}
@@ -105,6 +106,9 @@ func (e *Email) msgHeaders() textproto.MIMEHeader {
 	}
 	if _, ok := res["Cc"]; !ok && len(e.Cc) > 0 {
 		res.Set("Cc", strings.Join(e.Cc, ", "))
+	}
+	if _, ok := res["Reply-To"]; !ok && len(e.ReplyTo) > 0 {
+		res.Set("Reply-To", e.ReplyTo)
 	}
 	if _, ok := res["Subject"]; !ok && e.Subject != "" {
 		res.Set("Subject", e.Subject)
