@@ -73,7 +73,7 @@ for i := 0; i < 4; i++ {
 		for e := range ch {
 			p.Send(e, 10 * time.Second)
 		}
-	}
+	}()
 }
 ```
 
