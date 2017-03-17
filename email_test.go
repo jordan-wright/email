@@ -332,36 +332,36 @@ func Benchmark_base64Wrap(b *testing.B) {
 
 func TestParseSender(t *testing.T) {
 	var cases = []struct {
-		e    Email
-		want string
-		err  string
+		e      Email
+		want   string
+		haserr bool
 	}{
 		{
 			Email{From: "from@test.com"},
 			"from@test.com",
-			"",
+			false,
 		},
 		{
 			Email{Sender: "sender@test.com", From: "from@test.com"},
 			"sender@test.com",
-			"",
+			false,
 		},
 		{
 			Email{Sender: "bad_address_sender"},
 			"",
-			"mail: missing phrase",
+			true,
 		},
 		{
 			Email{Sender: "good@sender.com", From: "bad_address_from"},
 			"good@sender.com",
-			"",
+			false,
 		},
 	}
 
 	for i, testcase := range cases {
 		got, err := testcase.e.parseSender()
-		if got != testcase.want || (err == nil && testcase.err != "") || (err != nil && err.Error() != testcase.err) {
-			t.Errorf(`%d: got %s != want %s or error "%s" != "%s"`, i+1, got, testcase.want, err, testcase.err)
+		if got != testcase.want || (err != nil) != testcase.haserr {
+			t.Errorf(`%d: got %s != want %s or error "%t" != "%t"`, i+1, got, testcase.want, err != nil, testcase.haserr)
 		}
 	}
 }
