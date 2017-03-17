@@ -46,6 +46,7 @@ type Email struct {
 	Subject     string
 	Text        []byte // Plaintext message (optional)
 	HTML        []byte // Html message (optional)
+	Sender      string // override From as SMTP envelope sender (optional)
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
@@ -375,7 +376,7 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 	if e.From == "" || len(to) == 0 {
 		return errors.New("Must specify at least one From address and one To address")
 	}
-	from, err := mail.ParseAddress(e.From)
+	sender, err := e.parseSender()
 	if err != nil {
 		return err
 	}
@@ -383,7 +384,24 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 	if err != nil {
 		return err
 	}
-	return smtp.SendMail(addr, a, from.Address, to, raw)
+	return smtp.SendMail(addr, a, sender, to, raw)
+}
+
+// Select and parse an SMTP envelope sender address.  Choose Email.Sender if set, or fallback to Email.From.
+func (e *Email) parseSender() (string, error) {
+	if e.Sender != "" {
+		sender, err := mail.ParseAddress(e.Sender)
+		if err != nil {
+			return "", err
+		}
+		return sender.Address, nil
+	} else {
+		from, err := mail.ParseAddress(e.From)
+		if err != nil {
+			return "", err
+		}
+		return from.Address, nil
+	}
 }
 
 // SendWithTLS sends an email with an optional TLS config.
@@ -404,7 +422,7 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 	if e.From == "" || len(to) == 0 {
 		return errors.New("Must specify at least one From address and one To address")
 	}
-	from, err := mail.ParseAddress(e.From)
+	sender, err := e.parseSender()
 	if err != nil {
 		return err
 	}
@@ -436,7 +454,7 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 			}
 		}
 	}
-	if err = c.Mail(from.Address); err != nil {
+	if err = c.Mail(sender); err != nil {
 		return err
 	}
 	for _, addr := range to {
