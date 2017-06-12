@@ -23,6 +23,7 @@ type Pool struct {
 	mut          *sync.Mutex
 	lastBuildErr *timestampedErr
 	closing      chan struct{}
+	tlsConfig    *tls.Config
 }
 
 type client struct {
@@ -42,8 +43,8 @@ var (
 	ErrTimeout = errors.New("timed out")
 )
 
-func NewPool(address string, count int, auth smtp.Auth) *Pool {
-	return &Pool{
+func NewPool(address string, count int, auth smtp.Auth, opt_tlsConfig ...*tls.Config) (pool *Pool, err error) {
+	pool = &Pool{
 		addr:    address,
 		auth:    auth,
 		max:     count,
@@ -52,6 +53,14 @@ func NewPool(address string, count int, auth smtp.Auth) *Pool {
 		closing: make(chan struct{}),
 		mut:     &sync.Mutex{},
 	}
+	if len(opt_tlsConfig) == 1 {
+		pool.tlsConfig = opt_tlsConfig[0]
+	} else if host, _, e := net.SplitHostPort(address); e != nil {
+		return nil, e
+	} else {
+		pool.tlsConfig = &tls.Config{ServerName: host}
+	}
+	return
 }
 
 // go1.1 didn't have this method
@@ -164,17 +173,12 @@ func (p *Pool) makeOne() {
 	}()
 }
 
-func startTLS(c *client, addr string) (bool, error) {
+func startTLS(c *client, t *tls.Config) (bool, error) {
 	if ok, _ := c.Extension("STARTTLS"); !ok {
 		return false, nil
 	}
 
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return false, err
-	}
-
-	if err := c.StartTLS(&tls.Config{ServerName: host}); err != nil {
+	if err := c.StartTLS(t); err != nil {
 		return false, err
 	}
 
@@ -200,7 +204,7 @@ func (p *Pool) build() (*client, error) {
 	}
 	c := &client{cl, 0}
 
-	if _, err := startTLS(c, p.addr); err != nil {
+	if _, err := startTLS(c, p.tlsConfig); err != nil {
 		c.Close()
 		return nil, err
 	}
