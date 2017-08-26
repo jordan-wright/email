@@ -321,13 +321,14 @@ func (e *Email) Bytes() ([]byte, error) {
 	if isMixed || isAlternative {
 		w = multipart.NewWriter(buff)
 	}
-	if isMixed {
+	switch {
+	case isMixed:
 		headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
-	} else if isAlternative {
+	case isAlternative:
 		headers.Set("Content-Type", "multipart/alternative;\r\n boundary="+w.Boundary())
-	} else if len(e.HTML) > 0 {
+	case len(e.HTML) > 0:
 		headers.Set("Content-Type", "text/html; charset=UTF-8")
-	} else {
+	default:
 		headers.Set("Content-Type", "text/plain; charset=UTF-8")
 	}
 	headerToBytes(buff, headers)
