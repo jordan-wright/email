@@ -283,6 +283,25 @@ func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 	return res, nil
 }
 
+func writeMessage(buff *bytes.Buffer, msg []byte, multipart bool, mediaType string, w *multipart.Writer) error {
+	if multipart {
+		header := textproto.MIMEHeader{
+			"Content-Type":              {mediaType + "; charset=UTF-8"},
+			"Content-Transfer-Encoding": {"quoted-printable"},
+		}
+		if _, err := w.CreatePart(header); err != nil {
+			return err
+		}
+	}
+
+	qp := quotedprintable.NewWriter(buff)
+	// Write the text
+	if _, err := qp.Write(msg); err != nil {
+		return err
+	}
+	return qp.Close()
+}
+
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
 	// TODO: better guess buffer size
@@ -292,55 +311,61 @@ func (e *Email) Bytes() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := multipart.NewWriter(buff)
-	// TODO: determine the content type based on message/attachment mix.
-	headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
+
+	var (
+		isMixed       = len(e.Attachments) > 0
+		isAlternative = len(e.Text) > 0 && len(e.HTML) > 0
+	)
+
+	var w *multipart.Writer
+	if isMixed || isAlternative {
+		w = multipart.NewWriter(buff)
+	}
+	if isMixed {
+		headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
+	} else if isAlternative {
+		headers.Set("Content-Type", "multipart/alternative;\r\n boundary="+w.Boundary())
+	} else if len(e.HTML) > 0 {
+		headers.Set("Content-Type", "text/html; charset=UTF-8")
+	} else {
+		headers.Set("Content-Type", "text/plain; charset=UTF-8")
+	}
 	headerToBytes(buff, headers)
 	io.WriteString(buff, "\r\n")
 
-	// Start the multipart/mixed part
-	fmt.Fprintf(buff, "--%s\r\n", w.Boundary())
-	header := textproto.MIMEHeader{}
 	// Check to see if there is a Text or HTML field
 	if len(e.Text) > 0 || len(e.HTML) > 0 {
-		subWriter := multipart.NewWriter(buff)
-		// Create the multipart alternative part
-		header.Set("Content-Type", fmt.Sprintf("multipart/alternative;\r\n boundary=%s\r\n", subWriter.Boundary()))
-		// Write the header
-		headerToBytes(buff, header)
+		var subWriter *multipart.Writer
+
+		if isMixed && isAlternative {
+			// Create the multipart alternative part
+			subWriter = multipart.NewWriter(buff)
+			header := textproto.MIMEHeader{
+				"Content-Type": {"multipart/alternative;\r\n boundary=" + subWriter.Boundary()},
+			}
+			if _, err := w.CreatePart(header); err != nil {
+				return nil, err
+			}
+		} else {
+			subWriter = w
+		}
 		// Create the body sections
 		if len(e.Text) > 0 {
-			header.Set("Content-Type", fmt.Sprintf("text/plain; charset=UTF-8"))
-			header.Set("Content-Transfer-Encoding", "quoted-printable")
-			if _, err := subWriter.CreatePart(header); err != nil {
-				return nil, err
-			}
-			qp := quotedprintable.NewWriter(buff)
 			// Write the text
-			if _, err := qp.Write(e.Text); err != nil {
-				return nil, err
-			}
-			if err := qp.Close(); err != nil {
+			if err := writeMessage(buff, e.Text, isMixed || isAlternative, "text/plain", subWriter); err != nil {
 				return nil, err
 			}
 		}
 		if len(e.HTML) > 0 {
-			header.Set("Content-Type", fmt.Sprintf("text/html; charset=UTF-8"))
-			header.Set("Content-Transfer-Encoding", "quoted-printable")
-			if _, err := subWriter.CreatePart(header); err != nil {
-				return nil, err
-			}
-			qp := quotedprintable.NewWriter(buff)
 			// Write the HTML
-			if _, err := qp.Write(e.HTML); err != nil {
-				return nil, err
-			}
-			if err := qp.Close(); err != nil {
+			if err := writeMessage(buff, e.HTML, isMixed || isAlternative, "text/html", subWriter); err != nil {
 				return nil, err
 			}
 		}
-		if err := subWriter.Close(); err != nil {
-			return nil, err
+		if isMixed && isAlternative {
+			if err := subWriter.Close(); err != nil {
+				return nil, err
+			}
 		}
 	}
 	// Create attachment part, if necessary
@@ -352,8 +377,10 @@ func (e *Email) Bytes() ([]byte, error) {
 		// Write the base64Wrapped content to the part
 		base64Wrap(ap, a.Content)
 	}
-	if err := w.Close(); err != nil {
-		return nil, err
+	if isMixed || isAlternative {
+		if err := w.Close(); err != nil {
+			return nil, err
+		}
 	}
 	return buff.Bytes(), nil
 }
