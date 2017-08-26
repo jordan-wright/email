@@ -242,7 +242,7 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 	res := make(textproto.MIMEHeader, len(e.Headers)+4)
 	if e.Headers != nil {
-		for _, h := range []string{"To", "Cc", "From", "Subject", "Date", "Message-Id"} {
+		for _, h := range []string{"To", "Cc", "From", "Subject", "Date", "Message-Id", "MIME-Version"} {
 			if v, ok := e.Headers[h]; ok {
 				res[h] = v
 			}
@@ -272,8 +272,8 @@ func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 	if _, ok := res["Date"]; !ok {
 		res.Set("Date", time.Now().Format(time.RFC1123Z))
 	}
-	if _, ok := res["Mime-Version"]; !ok {
-		res.Set("Mime-Version", "1.0")
+	if _, ok := res["MIME-Version"]; !ok {
+		res.Set("MIME-Version", "1.0")
 	}
 	for field, vals := range e.Headers {
 		if _, ok := res[field]; !ok {
