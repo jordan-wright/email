@@ -306,7 +306,7 @@ func TestNonMultipartEmailFromReader(t *testing.T) {
 	ex.Headers.Add("Message-ID", "<foobar@example.com>")
 	raw := []byte(`From: "Foo Bar" <foobar@example.com>
 Content-Type: text/plain
-To: foobar@example.com 
+To: foobar@example.com
 Subject: Example Subject (no MIME Type)
 Message-ID: <foobar@example.com>
 
@@ -469,5 +469,41 @@ func Benchmark_base64Wrap(b *testing.B) {
 	}
 	for i := 0; i <= b.N; i++ {
 		base64Wrap(ioutil.Discard, file)
+	}
+}
+
+func TestParseSender(t *testing.T) {
+	var cases = []struct {
+		e      Email
+		want   string
+		haserr bool
+	}{
+		{
+			Email{From: "from@test.com"},
+			"from@test.com",
+			false,
+		},
+		{
+			Email{Sender: "sender@test.com", From: "from@test.com"},
+			"sender@test.com",
+			false,
+		},
+		{
+			Email{Sender: "bad_address_sender"},
+			"",
+			true,
+		},
+		{
+			Email{Sender: "good@sender.com", From: "bad_address_from"},
+			"good@sender.com",
+			false,
+		},
+	}
+
+	for i, testcase := range cases {
+		got, err := testcase.e.parseSender()
+		if got != testcase.want || (err != nil) != testcase.haserr {
+			t.Errorf(`%d: got %s != want %s or error "%t" != "%t"`, i+1, got, testcase.want, err != nil, testcase.haserr)
+		}
 	}
 }
