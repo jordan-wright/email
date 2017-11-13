@@ -331,8 +331,10 @@ func (e *Email) Bytes() ([]byte, error) {
 		headers.Set("Content-Type", "multipart/alternative;\r\n boundary="+w.Boundary())
 	case len(e.HTML) > 0:
 		headers.Set("Content-Type", "text/html; charset=UTF-8")
+		headers.Set("Content-Transfer-Encoding", "quoted-printable")
 	default:
 		headers.Set("Content-Type", "text/plain; charset=UTF-8")
+		headers.Set("Content-Transfer-Encoding", "quoted-printable")
 	}
 	headerToBytes(buff, headers)
 	io.WriteString(buff, "\r\n")
