@@ -77,7 +77,7 @@ func TestEmailHTML(t *testing.T) {
 	ct := msg.Header.Get("Content-type")
 	mt, _, err := mime.ParseMediaType(ct)
 	if err != nil {
-		t.Fatal("Content-type header is invalid: ", ct)
+		t.Fatalf("Content-type header is invalid: %#v", ct)
 	} else if mt != "text/html" {
 		t.Fatalf("Content-type expected \"text/html\", not %v", mt)
 	}
@@ -103,7 +103,7 @@ func TestEmailTextAttachment(t *testing.T) {
 	}
 	b := params["boundary"]
 	if b == "" {
-		t.Fatalf("Invalid or missing boundary parameter: ", b)
+		t.Fatalf("Invalid or missing boundary parameter: %#v", b)
 	}
 	if len(params) != 1 {
 		t.Fatal("Unexpected content-type parameters")
@@ -114,7 +114,7 @@ func TestEmailTextAttachment(t *testing.T) {
 
 	text, err := mixed.NextPart()
 	if err != nil {
-		t.Fatalf("Could not find text component of email: ", err)
+		t.Fatalf("Could not find text component of email: %s", err)
 	}
 
 	// Does the text portion match what we expect?
@@ -135,7 +135,7 @@ func TestEmailTextAttachment(t *testing.T) {
 	// Check attachments.
 	_, err = mixed.NextPart()
 	if err != nil {
-		t.Fatalf("Could not find attachment component of email: ", err)
+		t.Fatalf("Could not find attachment component of email: %s", err)
 	}
 
 	if _, err = mixed.NextPart(); err != io.EOF {
@@ -164,7 +164,7 @@ func TestEmailTextHtmlAttachment(t *testing.T) {
 	}
 	b := params["boundary"]
 	if b == "" {
-		t.Fatalf("Invalid or missing boundary parameter: ", b)
+		t.Fatal("Unexpected empty boundary parameter")
 	}
 	if len(params) != 1 {
 		t.Fatal("Unexpected content-type parameters")
@@ -175,7 +175,7 @@ func TestEmailTextHtmlAttachment(t *testing.T) {
 
 	text, err := mixed.NextPart()
 	if err != nil {
-		t.Fatalf("Could not find text component of email: ", err)
+		t.Fatalf("Could not find text component of email: %s", err)
 	}
 
 	// Does the text portion match what we expect?
@@ -201,7 +201,7 @@ func TestEmailTextHtmlAttachment(t *testing.T) {
 	// Check attachments.
 	_, err = mixed.NextPart()
 	if err != nil {
-		t.Fatalf("Could not find attachment component of email: ", err)
+		t.Fatalf("Could not find attachment component of email: %s", err)
 	}
 
 	if _, err = mixed.NextPart(); err != io.EOF {
@@ -227,7 +227,7 @@ func TestEmailAttachment(t *testing.T) {
 	}
 	b := params["boundary"]
 	if b == "" {
-		t.Fatalf("Invalid or missing boundary parameter: ", b)
+		t.Fatal("Unexpected empty boundary parameter")
 	}
 	if len(params) != 1 {
 		t.Fatal("Unexpected content-type parameters")
@@ -239,7 +239,7 @@ func TestEmailAttachment(t *testing.T) {
 	// Check attachments.
 	_, err = mixed.NextPart()
 	if err != nil {
-		t.Fatalf("Could not find attachment component of email: ", err)
+		t.Fatalf("Could not find attachment component of email: %s", err)
 	}
 
 	if _, err = mixed.NextPart(); err != io.EOF {
