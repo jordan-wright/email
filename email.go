@@ -174,9 +174,15 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 				}
 				ps = append(ps, sps...)
 			} else {
+				var reader io.Reader
+				reader = p
+				const cte = "Content-Transfer-Encoding"
+				if p.Header.Get(cte) == "base64" {
+					reader = base64.NewDecoder(base64.StdEncoding, reader)
+				}
 				// Otherwise, just append the part to the list
 				// Copy the part data into the buffer
-				if _, err := io.Copy(&buf, p); err != nil {
+				if _, err := io.Copy(&buf, reader); err != nil {
 					return ps, err
 				}
 				ps = append(ps, &part{body: buf.Bytes(), header: p.Header})
