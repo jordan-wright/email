@@ -276,7 +276,11 @@ func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 	}
 	// Date and From are required headers.
 	if _, ok := res["From"]; !ok {
-		res.Set("From", e.From)
+		addr, err := mail.ParseAddress(e.From)
+		if err != nil {
+			return nil, err
+		}
+		res.Set("From", mime.QEncoding.Encode("UTF-8", addr.Name)+" <"+addr.Address+">")
 	}
 	if _, ok := res["Date"]; !ok {
 		res.Set("Date", time.Now().Format(time.RFC1123Z))
@@ -556,7 +560,7 @@ func headerToBytes(buff *bytes.Buffer, header textproto.MIMEHeader) {
 			io.WriteString(buff, ": ")
 			// Write the encoded header if needed
 			switch {
-			case field == "Content-Type" || field == "Content-Disposition":
+			case field == "Content-Type" || field == "Content-Disposition" || field == "From":
 				buff.Write([]byte(subval))
 			default:
 				buff.Write([]byte(mime.QEncoding.Encode("UTF-8", subval)))
