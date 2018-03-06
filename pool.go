@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// Pool is a pool of reusable connections.
 type Pool struct {
 	addr         string
 	auth         smtp.Auth
@@ -39,11 +40,14 @@ type timestampedErr struct {
 const maxFails = 4
 
 var (
-	ErrClosed  = errors.New("pool closed")
+	// ErrClosed happens when a pool is closed.
+	ErrClosed = errors.New("pool closed")
+	// ErrTimeout happens whe a connection times out.
 	ErrTimeout = errors.New("timed out")
 )
 
-func NewPool(address string, count int, auth smtp.Auth, opt_tlsConfig ...*tls.Config) (pool *Pool, err error) {
+// NewPool creates a new pool of reusable connections.
+func NewPool(address string, count int, auth smtp.Auth, optTLSConfig ...*tls.Config) (pool *Pool, err error) {
 	pool = &Pool{
 		addr:    address,
 		auth:    auth,
@@ -53,8 +57,8 @@ func NewPool(address string, count int, auth smtp.Auth, opt_tlsConfig ...*tls.Co
 		closing: make(chan struct{}),
 		mut:     &sync.Mutex{},
 	}
-	if len(opt_tlsConfig) == 1 {
-		pool.tlsConfig = opt_tlsConfig[0]
+	if len(optTLSConfig) == 1 {
+		pool.tlsConfig = optTLSConfig[0]
 	} else if host, _, e := net.SplitHostPort(address); e != nil {
 		return nil, e
 	} else {

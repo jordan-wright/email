@@ -27,8 +27,10 @@ import (
 )
 
 const (
-	MaxLineLength      = 76                             // MaxLineLength is the maximum line length per RFC 2045
-	defaultContentType = "text/plain; charset=us-ascii" // defaultContentType is the default Content-Type according to RFC 2045, section 5.2
+	// MaxLineLength is the maximum line length per RFC 2045
+	MaxLineLength = 76
+	// defaultContentType is the default Content-Type according to RFC 2045, section 5.2
+	defaultContentType = "text/plain; charset=us-ascii"
 )
 
 // ErrMissingBoundary is returned when there is no boundary given for a multipart entity
@@ -166,7 +168,7 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 			if _, ok := p.Header["Content-Type"]; !ok {
 				p.Header.Set("Content-Type", defaultContentType)
 			}
-			subct, _, err := mime.ParseMediaType(p.Header.Get("Content-Type"))
+			subct, _, _ := mime.ParseMediaType(p.Header.Get("Content-Type"))
 			if strings.HasPrefix(subct, "multipart/") {
 				sps, err := parseMIMEParts(p.Header, p)
 				if err != nil {
@@ -433,13 +435,12 @@ func (e *Email) parseSender() (string, error) {
 			return "", err
 		}
 		return sender.Address, nil
-	} else {
-		from, err := mail.ParseAddress(e.From)
-		if err != nil {
-			return "", err
-		}
-		return from.Address, nil
 	}
+	from, err := mail.ParseAddress(e.From)
+	if err != nil {
+		return "", err
+	}
+	return from.Address, nil
 }
 
 // SendWithTLS sends an email with an optional TLS config.
