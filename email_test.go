@@ -11,7 +11,6 @@ import (
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net/mail"
-	"net/smtp"
 	"net/textproto"
 )
 
@@ -374,23 +373,6 @@ d-printable decoding.</div>
 	if e.From != ex.From {
 		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
 	}
-}
-
-func ExampleGmail() {
-	e := NewEmail()
-	e.From = "Jordan Wright <test@gmail.com>"
-	e.To = []string{"test@example.com"}
-	e.Bcc = []string{"test_bcc@example.com"}
-	e.Cc = []string{"test_cc@example.com"}
-	e.Subject = "Awesome Subject"
-	e.Text = []byte("Text Body is, of course, supported!\n")
-	e.HTML = []byte("<h1>Fancy Html is supported, too!</h1>\n")
-	e.Send("smtp.gmail.com:587", smtp.PlainAuth("", e.From, "password123", "smtp.gmail.com"))
-}
-
-func ExampleAttach() {
-	e := NewEmail()
-	e.AttachFile("test.txt")
 }
 
 func Test_base64Wrap(t *testing.T) {
