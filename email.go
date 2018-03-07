@@ -259,7 +259,23 @@ func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 			}
 		}
 	}
-	// Set headers if there are values.
+
+	res, err := e.setHeadersFromValues(res)
+	if err != nil {
+		return nil, err
+	}
+
+	res = e.setDateFromMIMEVersion(res)
+
+	for field, vals := range e.Headers {
+		if _, ok := res[field]; !ok {
+			res[field] = vals
+		}
+	}
+	return res, nil
+}
+
+func (e *Email) setHeadersFromValues(res textproto.MIMEHeader) (textproto.MIMEHeader, error) {
 	if _, ok := res["To"]; !ok && len(e.To) > 0 {
 		res.Set("To", strings.Join(e.To, ", "))
 	}
@@ -276,7 +292,10 @@ func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 		}
 		res.Set("Message-Id", id)
 	}
-	// Date and From are required headers.
+	return res, nil
+}
+
+func (e *Email) setDateFromMIMEVersion(res textproto.MIMEHeader) textproto.MIMEHeader {
 	if _, ok := res["From"]; !ok {
 		res.Set("From", e.From)
 	}
@@ -286,12 +305,7 @@ func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 	if _, ok := res["MIME-Version"]; !ok {
 		res.Set("MIME-Version", "1.0")
 	}
-	for field, vals := range e.Headers {
-		if _, ok := res[field]; !ok {
-			res[field] = vals
-		}
-	}
-	return res, nil
+	return res
 }
 
 func writeMessage(buff *bytes.Buffer, msg []byte, multipart bool, mediaType string, w *multipart.Writer) error {
