@@ -468,9 +468,13 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 	if err != nil {
 		return err
 	}
-	// Taken from the standard library
-	// https://github.com/golang/go/blob/master/src/net/smtp/smtp.go#L300
-	c, err := smtp.Dial(addr)
+	
+	conn, err := tls.Dial("tcp", addr, t)
+	if err != nil {
+		return err
+	}
+	
+	c, err := smtp.NewClient(conn, t.ServerName)
 	if err != nil {
 		return err
 	}
