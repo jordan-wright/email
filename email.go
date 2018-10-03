@@ -39,6 +39,7 @@ var ErrMissingContentType = errors.New("No Content-Type found for MIME entity")
 
 // Email is the type used for email messages
 type Email struct {
+	ReplyTo     []string
 	From        string
 	To          []string
 	Bcc         []string
@@ -251,13 +252,16 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 	res := make(textproto.MIMEHeader, len(e.Headers)+4)
 	if e.Headers != nil {
-		for _, h := range []string{"To", "Cc", "From", "Subject", "Date", "Message-Id", "MIME-Version"} {
+		for _, h := range []string{"Reply-To", "To", "Cc", "From", "Subject", "Date", "Message-Id", "MIME-Version"} {
 			if v, ok := e.Headers[h]; ok {
 				res[h] = v
 			}
 		}
 	}
 	// Set headers if there are values.
+	if _, ok := res["Reply-To"]; !ok && len(e.ReplyTo) > 0 {
+		res.Set("Reply-To", strings.Join(e.ReplyTo, ", "))
+	}
 	if _, ok := res["To"]; !ok && len(e.To) > 0 {
 		res.Set("To", strings.Join(e.To, ", "))
 	}
@@ -468,9 +472,13 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 	if err != nil {
 		return err
 	}
-	// Taken from the standard library
-	// https://github.com/golang/go/blob/master/src/net/smtp/smtp.go#L300
-	c, err := smtp.Dial(addr)
+
+	conn, err := tls.Dial("tcp", addr, t)
+	if err != nil {
+		return err
+	}
+
+	c, err := smtp.NewClient(conn, t.ServerName)
 	if err != nil {
 		return err
 	}
