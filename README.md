@@ -26,7 +26,7 @@ The ```email``` package currently supports the following:
 
 ### Examples
 #### Sending email using Gmail
-```
+```go
 e := email.NewEmail()
 e.From = "Jordan Wright <test@gmail.com>"
 e.To = []string{"test@example.com"}
@@ -40,7 +40,7 @@ e.Send("smtp.gmail.com:587", smtp.PlainAuth("", "test@gmail.com", "password123",
 
 #### Another Method for Creating an Email
 You can also create an email directly by creating a struct as follows:
-```
+```go
 e := &email.Email {
 	To: []string{"test@example.com"},
 	From: "Jordan Wright <test@gmail.com>",
@@ -55,13 +55,13 @@ e := &email.Email {
 You can also create an email from any type that implements the ```io.Reader``` interface by using ```email.NewEmailFromReader```.
 
 #### Attaching a File
-```
+```go
 e := NewEmail()
 e.AttachFile("test.txt")
 ```
 
 #### A Pool of Reusable Connections
-```
+```go
 (var ch <-chan *email.Email)
 p := email.NewPool(
 	"smtp.gmail.com:587",
