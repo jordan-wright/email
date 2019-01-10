@@ -168,6 +168,9 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 				p.Header.Set("Content-Type", defaultContentType)
 			}
 			subct, _, err := mime.ParseMediaType(p.Header.Get("Content-Type"))
+			if err != nil {
+				return ps, err
+			}
 			if strings.HasPrefix(subct, "multipart/") {
 				sps, err := parseMIMEParts(p.Header, p)
 				if err != nil {
