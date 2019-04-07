@@ -1,6 +1,7 @@
 package email
 
 import (
+	"strings"
 	"testing"
 
 	"bytes"
@@ -144,9 +145,13 @@ func TestEmailTextAttachment(t *testing.T) {
 }
 
 func TestEmailTextAttachmentWithName(t *testing.T) {
+	var (
+		file     = "go.mod"
+		fileName = "rad2.mod"
+	)
 	e := prepareEmail()
 	e.Text = []byte("Text Body is, of course, supported!\n")
-	_, err := e.AttachFileWithName("go.mod", "rad2.mod")
+	_, err := e.AttachFileWithName(file, fileName)
 	if err != nil {
 		t.Fatal("Could not add an attachment to the message: ", err)
 	}
@@ -193,9 +198,12 @@ func TestEmailTextAttachmentWithName(t *testing.T) {
 	}
 
 	// Check attachments.
-	_, err = mixed.NextPart()
+	part, err := mixed.NextPart()
 	if err != nil {
 		t.Fatalf("Could not find attachment component of email: %s", err)
+	}
+	if !strings.Contains(part.FileName(), fileName) {
+		t.Fatalf("Could not find the matched attachement name required %s find %s", fileName, part.FileName())
 	}
 
 	if _, err = mixed.NextPart(); err != io.EOF {
