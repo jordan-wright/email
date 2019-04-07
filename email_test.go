@@ -215,9 +215,13 @@ func TestEmailTextAttachment(t *testing.T) {
 }
 
 func TestEmailTextAttachmentWithName(t *testing.T) {
+	var (
+		file     = "go.mod"
+		fileName = "rad2.mod"
+	)
 	e := prepareEmail()
 	e.Text = []byte("Text Body is, of course, supported!\n")
-	_, err := e.AttachFileWithName("go.mod", "rad2.mod")
+	_, err := e.AttachFileWithName(file, fileName)
 	if err != nil {
 		t.Fatal("Could not add an attachment to the message: ", err)
 	}
@@ -264,9 +268,12 @@ func TestEmailTextAttachmentWithName(t *testing.T) {
 	}
 
 	// Check attachments.
-	_, err = mixed.NextPart()
+	part, err := mixed.NextPart()
 	if err != nil {
 		t.Fatalf("Could not find attachment component of email: %s", err)
+	}
+	if !strings.Contains(part.FileName(), fileName) {
+		t.Fatalf("Could not find the matched attachement name required %s find %s", fileName, part.FileName())
 	}
 
 	if _, err = mixed.NextPart(); err != io.EOF {
@@ -588,7 +595,7 @@ d-printable decoding.</div>
 	}
 }
 
-func TestAttachmentEmailFromReader (t *testing.T) {
+func TestAttachmentEmailFromReader(t *testing.T) {
 	ex := &Email{
 		Subject: "Test Subject",
 		To:      []string{"Jordan Wright <jmwright798@gmail.com>"},
@@ -652,7 +659,7 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	if e.From != ex.From {
 		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
 	}
-	if len(e.Attachments) != 1  {
+	if len(e.Attachments) != 1 {
 		t.Fatalf("Incorrect number of attachments %d != %d", len(e.Attachments), 1)
 	}
 	if e.Attachments[0].Filename != a.Filename {
