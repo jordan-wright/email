@@ -214,6 +214,66 @@ func TestEmailTextAttachment(t *testing.T) {
 	}
 }
 
+func TestEmailTextAttachmentWithName(t *testing.T) {
+	e := prepareEmail()
+	e.Text = []byte("Text Body is, of course, supported!\n")
+	_, err := e.AttachFileWithName("go.mod", "rad2.mod")
+	if err != nil {
+		t.Fatal("Could not add an attachment to the message: ", err)
+	}
+
+	msg := basicTests(t, e)
+
+	// Were the right headers set?
+	ct := msg.Header.Get("Content-type")
+	mt, params, err := mime.ParseMediaType(ct)
+	if err != nil {
+		t.Fatal("Content-type header is invalid: ", ct)
+	} else if mt != "multipart/mixed" {
+		t.Fatalf("Content-type expected \"multipart/mixed\", not %v", mt)
+	}
+	b := params["boundary"]
+	if b == "" {
+		t.Fatalf("Invalid or missing boundary parameter: %#v", b)
+	}
+	if len(params) != 1 {
+		t.Fatal("Unexpected content-type parameters")
+	}
+
+	// Is the generated message parsable?
+	mixed := multipart.NewReader(msg.Body, params["boundary"])
+
+	text, err := mixed.NextPart()
+	if err != nil {
+		t.Fatalf("Could not find text component of email: %s", err)
+	}
+
+	// Does the text portion match what we expect?
+	mt, _, err = mime.ParseMediaType(text.Header.Get("Content-type"))
+	if err != nil {
+		t.Fatal("Could not parse message's Content-Type")
+	} else if mt != "text/plain" {
+		t.Fatal("Message missing text/plain")
+	}
+	plainText, err := ioutil.ReadAll(text)
+	if err != nil {
+		t.Fatal("Could not read plain text component of message: ", err)
+	}
+	if !bytes.Equal(plainText, []byte("Text Body is, of course, supported!\r\n")) {
+		t.Fatalf("Plain text is broken: %#q", plainText)
+	}
+
+	// Check attachments.
+	_, err = mixed.NextPart()
+	if err != nil {
+		t.Fatalf("Could not find attachment component of email: %s", err)
+	}
+
+	if _, err = mixed.NextPart(); err != io.EOF {
+		t.Error("Expected only text and one attachment!")
+	}
+}
+
 func TestEmailTextHtmlAttachment(t *testing.T) {
 	e := prepareEmail()
 	e.Text = []byte("Text Body is, of course, supported!\n")
@@ -618,6 +678,11 @@ func ExampleGmail() {
 func ExampleAttach() {
 	e := NewEmail()
 	e.AttachFile("test.txt")
+}
+
+func ExampleAttachFileWithNamed() {
+	e := NewEmail()
+	e.AttachFileWithName("test.txt", "test2")
 }
 
 func Test_base64Wrap(t *testing.T) {
