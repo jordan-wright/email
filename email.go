@@ -95,6 +95,10 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 		switch {
 		case h == "Subject":
 			e.Subject = v[0]
+		        subj, err := (&mime.WordDecoder{}).Decode(e.Subject)
+		        if err == nil && len(subj) > 0 {
+				e.Subject = subj
+			}
 			delete(hdrs, h)
 		case h == "To":
 			e.To = v
