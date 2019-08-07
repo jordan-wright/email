@@ -8,7 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
-	"errors"
+	"github.com/pkg/errors"
 	"fmt"
 	"io"
 	"math"
@@ -88,7 +88,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 	// Parse the main headers
 	hdrs, err := tp.ReadMIMEHeader()
 	if err != nil {
-		return e, err
+		return e, errors.Wrap(err, "Failed to read MIME header")
 	}
 	// Set the subject, to, cc, bcc, and from
 	for h, v := range hdrs {
@@ -115,7 +115,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 	// Recursively parse the MIME parts
 	ps, err := parseMIMEParts(e.Headers, body)
 	if err != nil {
-		return e, err
+		return e, errors.Wrap(err, "Failed to parse MIME parts")
 	}
 	for _, p := range ps {
 		if ct := p.header.Get("Content-Type"); ct == "" {
@@ -147,7 +147,7 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 	}
 	ct, params, err := mime.ParseMediaType(hs.Get("Content-Type"))
 	if err != nil {
-		return ps, err
+		return ps, errors.Wrap(err, "Failed to parse MIME content type")
 	}
 	// If it's a multipart email, recursively parse the parts
 	if strings.HasPrefix(ct, "multipart/") {
@@ -169,12 +169,12 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 			}
 			subct, _, err := mime.ParseMediaType(p.Header.Get("Content-Type"))
 			if err != nil {
-				return ps, err
+				return ps, errors.Wrap(err, "Failed to parse content type of a part")
 			}
 			if strings.HasPrefix(subct, "multipart/") {
 				sps, err := parseMIMEParts(p.Header, p)
 				if err != nil {
-					return ps, err
+					return ps, errors.Wrap(err, "Failed to parse multipart parts")
 				}
 				ps = append(ps, sps...)
 			} else {
@@ -187,7 +187,7 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 				// Otherwise, just append the part to the list
 				// Copy the part data into the buffer
 				if _, err := io.Copy(&buf, reader); err != nil {
-					return ps, err
+					return ps, errors.Wrap(err, "Failed to load content of a part")
 				}
 				ps = append(ps, &part{body: buf.Bytes(), header: p.Header})
 			}
@@ -196,7 +196,7 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 		// If it is not a multipart email, parse the body content as a single "part"
 		var buf bytes.Buffer
 		if _, err := io.Copy(&buf, b); err != nil {
-			return ps, err
+			return ps, errors.Wrap(err, "Failed to load mail content")
 		}
 		ps = append(ps, &part{body: buf.Bytes(), header: hs})
 	}
