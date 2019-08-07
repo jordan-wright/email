@@ -334,7 +334,7 @@ func TestBase64EmailFromReader(t *testing.T) {
 		Text:    []byte("This is a test email with HTML Formatting. It also has very long lines so that the content must be wrapped if using quoted-printable decoding."),
 		HTML:    []byte("<div dir=\"ltr\">This is a test email with <b>HTML Formatting.</b>\u00a0It also has very long lines so that the content must be wrapped if using quoted-printable decoding.</div>\n"),
 	}
-	raw := []byte(`
+	rawMails := [][]byte{[]byte(`
 		MIME-Version: 1.0
 Subject: Test Subject
 From: Jordan Wright <jmwright798@gmail.com>
@@ -357,22 +357,50 @@ Content-Transfer-Encoding: quoted-printable
 also has very long lines so that the content must be wrapped if using quote=
 d-printable decoding.</div>
 
---001a114fb3fc42fd6b051f834280--`)
-	e, err := NewEmailFromReader(bytes.NewReader(raw))
-	if err != nil {
-		t.Fatalf("Error creating email %s", err.Error())
-	}
-	if e.Subject != ex.Subject {
-		t.Fatalf("Incorrect subject. %#q != %#q", e.Subject, ex.Subject)
-	}
-	if !bytes.Equal(e.Text, ex.Text) {
-		t.Fatalf("Incorrect text: %#q != %#q", e.Text, ex.Text)
-	}
-	if !bytes.Equal(e.HTML, ex.HTML) {
-		t.Fatalf("Incorrect HTML: %#q != %#q", e.HTML, ex.HTML)
-	}
-	if e.From != ex.From {
-		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
+--001a114fb3fc42fd6b051f834280--`),
+
+		// another case with capitalized "BASE64"
+		[]byte(`
+		MIME-Version: 1.0
+Subject: Test Subject
+From: Jordan Wright <jmwright798@gmail.com>
+To: Jordan Wright <jmwright798@gmail.com>
+Content-Type: multipart/alternative; boundary=001a114fb3fc42fd6b051f834280
+
+--001a114fb3fc42fd6b051f834280
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: BASE64
+
+VGhpcyBpcyBhIHRlc3QgZW1haWwgd2l0aCBIVE1MIEZvcm1hdHRpbmcuIEl0IGFsc28gaGFzIHZl
+cnkgbG9uZyBsaW5lcyBzbyB0aGF0IHRoZSBjb250ZW50IG11c3QgYmUgd3JhcHBlZCBpZiB1c2lu
+ZyBxdW90ZWQtcHJpbnRhYmxlIGRlY29kaW5nLg==
+
+--001a114fb3fc42fd6b051f834280
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<div dir=3D"ltr">This is a test email with <b>HTML Formatting.</b>=C2=A0It =
+also has very long lines so that the content must be wrapped if using quote=
+d-printable decoding.</div>
+
+--001a114fb3fc42fd6b051f834280--`)}
+	for _, raw := range rawMails {
+		e, err := NewEmailFromReader(bytes.NewReader(raw))
+		if err != nil {
+			t.Fatalf("Error creating email %s", err.Error())
+		}
+		if e.Subject != ex.Subject {
+			t.Fatalf("Incorrect subject. %#q != %#q", e.Subject, ex.Subject)
+		}
+		if !bytes.Equal(e.Text, ex.Text) {
+			t.Fatalf("Incorrect text: %#q != %#q", e.Text, ex.Text)
+		}
+		if !bytes.Equal(e.HTML, ex.HTML) {
+			t.Fatalf("Incorrect HTML: %#q != %#q", e.HTML, ex.HTML)
+		}
+		if e.From != ex.From {
+			t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
+		}
 	}
 }
 
