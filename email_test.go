@@ -296,6 +296,41 @@ d-printable decoding.</div>
 
 }
 
+func TestNonAsciiEmailFromReader(t *testing.T) {
+	ex := &Email{
+		Subject: "Test Subject",
+		To:      []string{"Anaïs <anais@example.org>"},
+		Cc:      []string{"Patrik Fältström <paf@example.com>"},
+		From:    "Mrs ValÃ©rie Dupont <valerie.dupont@example.com>",
+		Text:    []byte("This is a test message!"),
+	}
+	raw := []byte(`
+	MIME-Version: 1.0
+Subject: =?UTF-8?Q?Test Subject?=
+From: Mrs =?ISO-8859-1?Q?Val=C3=A9rie=20Dupont?= <valerie.dupont@example.com>
+To: =?utf-8?q?Ana=C3=AFs?= <anais@example.org>
+Cc: =?ISO-8859-1?Q?Patrik_F=E4ltstr=F6m?= <paf@example.com>
+Content-type: text/plain; charset=ISO-8859-1
+
+This is a test message!`)
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("Error creating email %s", err.Error())
+	}
+	if e.Subject != ex.Subject {
+		t.Fatalf("Incorrect subject. %#q != %#q", e.Subject, ex.Subject)
+	}
+	if e.From != ex.From {
+		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
+	}
+	if e.To[0] != ex.To[0] {
+		t.Fatalf("Incorrect \"To\": %#q != %#q", e.To, ex.To)
+	}
+	if e.Cc[0] != ex.Cc[0] {
+		t.Fatalf("Incorrect \"Cc\": %#q != %#q", e.Cc, ex.Cc)
+	}
+}
+
 func TestNonMultipartEmailFromReader(t *testing.T) {
 	ex := &Email{
 		Text:    []byte("This is a test message!"),
