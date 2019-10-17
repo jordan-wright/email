@@ -1,6 +1,7 @@
 package email
 
 import (
+	"strings"
 	"testing"
 
 	"bytes"
@@ -393,6 +394,40 @@ also has very long lines so that the content must be wrapped if using quote=
 d-printable decoding.</div>
 
 --001a114fb3fc42fd6b051f834280--`)
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("Error creating email %s", err.Error())
+	}
+	if e.Subject != ex.Subject {
+		t.Fatalf("Incorrect subject. %#q != %#q", e.Subject, ex.Subject)
+	}
+	if !bytes.Equal(e.Text, ex.Text) {
+		t.Fatalf("Incorrect text: %#q != %#q", e.Text, ex.Text)
+	}
+	if !bytes.Equal(e.HTML, ex.HTML) {
+		t.Fatalf("Incorrect HTML: %#q != %#q", e.HTML, ex.HTML)
+	}
+	if e.From != ex.From {
+		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
+	}
+}
+
+func TestLongWhitespaceBodyEmailFromReader(t *testing.T) {
+	ex := &Email{
+		Subject: "Test Subject",
+		To:      []string{"Jordan Wright <jmwright798@gmail.com>"},
+		From:    "Jordan Wright <jmwright798@gmail.com>",
+		HTML:    []byte("<div dir=\"ltr\">This is a test email with <b>HTML Formatting.</b>\u00a0It also has very long lines so that the content must be wrapped if using quoted-printable decoding.</div>\r\n"),
+	}
+	// Create large text body consisting only of spaces.
+	// Body is larger than the default buffer size of 4096 ensuring that
+	// a Read will start with spaces at the start of the buffer.
+	textLen := 5100
+	ex.Text = []byte(strings.Repeat(" ", textLen))
+	raw, err := ex.Bytes()
+	if err != nil {
+		t.Fatalf("Error creating email bytes %s", err.Error())
+	}
 	e, err := NewEmailFromReader(bytes.NewReader(raw))
 	if err != nil {
 		t.Fatalf("Error creating email %s", err.Error())

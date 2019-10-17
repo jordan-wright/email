@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -68,13 +69,17 @@ func NewEmail() *Email {
 // whitespace, as this can cause email imports to fail.
 type trimReader struct {
 	rd io.Reader
+	trimOnce sync.Once
 }
 
-// Read trims off any unicode whitespace from the originating reader
-func (tr trimReader) Read(buf []byte) (int, error) {
+// Read trims off any unicode whitespace from the originating reader.
+// Only trims on the very first read.
+func (tr *trimReader) Read(buf []byte) (int, error) {
 	n, err := tr.rd.Read(buf)
-	t := bytes.TrimLeftFunc(buf[:n], unicode.IsSpace)
-	n = copy(buf, t)
+	tr.trimOnce.Do(func() {
+		t := bytes.TrimLeftFunc(buf[:n], unicode.IsSpace)
+		n = copy(buf, t)
+	})
 	return n, err
 }
 
@@ -84,7 +89,7 @@ func (tr trimReader) Read(buf []byte) (int, error) {
 func NewEmailFromReader(r io.Reader) (*Email, error) {
 	e := NewEmail()
 	s := trimReader{rd: r}
-	tp := textproto.NewReader(bufio.NewReader(s))
+	tp := textproto.NewReader(bufio.NewReader(&s))
 	// Parse the main headers
 	hdrs, err := tp.ReadMIMEHeader()
 	if err != nil {
