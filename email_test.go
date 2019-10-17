@@ -411,6 +411,81 @@ d-printable decoding.</div>
 	}
 }
 
+func TestAttachmentEmailFromReader (t *testing.T) {
+	ex := &Email{
+		Subject: "Test Subject",
+		To:      []string{"Jordan Wright <jmwright798@gmail.com>"},
+		From:    "Jordan Wright <jmwright798@gmail.com>",
+		Text:    []byte("Simple text body"),
+		HTML:    []byte("<div dir=\"ltr\">Simple HTML body</div>\n"),
+	}
+	a, err := ex.Attach(bytes.NewReader([]byte("Let's just pretend this is raw JPEG data.")), "cat.jpeg", "image/jpeg")
+	if err != nil {
+		t.Fatalf("Error attaching image %s", err.Error())
+	}
+	raw := []byte(`
+From: Jordan Wright <jmwright798@gmail.com>
+Date: Thu, 17 Oct 2019 08:55:37 +0100
+Mime-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary=35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
+To: Jordan Wright <jmwright798@gmail.com>
+Subject: Test Subject
+
+--35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
+Content-Type: multipart/alternative;
+ boundary=b10ca5b1072908cceb667e8968d3af04503b7ab07d61c9f579c15b416d7c
+
+--b10ca5b1072908cceb667e8968d3af04503b7ab07d61c9f579c15b416d7c
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain; charset=UTF-8
+
+Simple text body
+--b10ca5b1072908cceb667e8968d3af04503b7ab07d61c9f579c15b416d7c
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=UTF-8
+
+<div dir=3D"ltr">Simple HTML body</div>
+
+--b10ca5b1072908cceb667e8968d3af04503b7ab07d61c9f579c15b416d7c--
+
+--35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
+Content-Disposition: attachment;
+ filename="cat.jpeg"
+Content-Id: <cat.jpeg>
+Content-Transfer-Encoding: base64
+Content-Type: image/jpeg
+
+TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
+
+--35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7--`)
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("Error creating email %s", err.Error())
+	}
+	if e.Subject != ex.Subject {
+		t.Fatalf("Incorrect subject. %#q != %#q", e.Subject, ex.Subject)
+	}
+	if !bytes.Equal(e.Text, ex.Text) {
+		t.Fatalf("Incorrect text: %#q != %#q", e.Text, ex.Text)
+	}
+	if !bytes.Equal(e.HTML, ex.HTML) {
+		t.Fatalf("Incorrect HTML: %#q != %#q", e.HTML, ex.HTML)
+	}
+	if e.From != ex.From {
+		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
+	}
+	if len(e.Attachments) != 1  {
+		t.Fatalf("Incorrect number of attachments %d != %d", len(e.Attachments), 1)
+	}
+	if e.Attachments[0].Filename != a.Filename {
+		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[0].Filename, a.Filename)
+	}
+	if !bytes.Equal(e.Attachments[0].Content, a.Content) {
+		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[0].Content, a.Content)
+	}
+}
+
 func ExampleGmail() {
 	e := NewEmail()
 	e.From = "Jordan Wright <test@gmail.com>"
