@@ -245,11 +245,9 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 		Header:   textproto.MIMEHeader{},
 		Content:  buffer.Bytes(),
 	}
-	// Get the Content-Type to be used in the MIMEHeader
 	if c != "" {
 		at.Header.Set("Content-Type", c)
 	} else {
-		// If the Content-Type is blank, set the Content-Type to "application/octet-stream"
 		at.Header.Set("Content-Type", "application/octet-stream")
 	}
 	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=\"%s\"", filename))
