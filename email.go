@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -51,6 +52,38 @@ type Email struct {
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
+
+	initFunc sync.Once
+	bufPool  *bufferPool
+}
+
+func (e *Email) init() {
+	e.initFunc.Do(func() {
+		e.bufPool = newBufferPool()
+	})
+}
+
+type bufferPool struct {
+	p sync.Pool
+}
+
+func newBufferPool() *bufferPool {
+	return &bufferPool{
+		sync.Pool{
+			New: func() interface{} {
+				return bytes.NewBuffer(nil)
+			},
+		},
+	}
+}
+
+func (p *bufferPool) Borrow() *bytes.Buffer {
+	return p.p.Get().(*bytes.Buffer)
+}
+
+func (p *bufferPool) HandBack(b *bytes.Buffer) {
+	b.Reset()
+	p.p.Put(b)
 }
 
 // part is a copyable representation of a multipart.Part
@@ -61,7 +94,9 @@ type part struct {
 
 // NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
-	return &Email{Headers: textproto.MIMEHeader{}}
+	e := &Email{Headers: textproto.MIMEHeader{}}
+	e.init() // better do it now if we can
+	return e
 }
 
 // trimReader is a custom io.Reader that will trim any leading
@@ -349,9 +384,8 @@ func writeMessage(buff io.Writer, msg []byte, multipart bool, mediaType string, 
 
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
-	// TODO: better guess buffer size
-	// TODO: pool buffers using sync.Pool - avoids guessing buffer size.
-	buff := bytes.NewBuffer(make([]byte, 0, 4096))
+	e.init()
+	buff := e.bufPool.Borrow()
 
 	headers, err := e.msgHeaders()
 	if err != nil {
@@ -434,7 +468,10 @@ func (e *Email) Bytes() ([]byte, error) {
 			return nil, err
 		}
 	}
-	return buff.Bytes(), nil
+
+	result := append([]byte(nil), buff.Bytes()...)
+	e.bufPool.HandBack(buff)
+	return result, nil
 }
 
 // Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
