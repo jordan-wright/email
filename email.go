@@ -350,6 +350,7 @@ func writeMessage(buff io.Writer, msg []byte, multipart bool, mediaType string, 
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
 	// TODO: better guess buffer size
+	// TODO: pool buffers using sync.Pool - avoids guessing buffer size.
 	buff := bytes.NewBuffer(make([]byte, 0, 4096))
 
 	headers, err := e.msgHeaders()
