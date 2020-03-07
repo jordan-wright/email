@@ -280,7 +280,7 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 // "e"'s fields To, Cc, From, Subject will be used unless they are present in
 // e.Headers. Unless set in e.Headers, "Date" will filled with the current time.
 func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
-	res := make(textproto.MIMEHeader, len(e.Headers)+4)
+	res := make(textproto.MIMEHeader, len(e.Headers)+6)
 	if e.Headers != nil {
 		for _, h := range []string{"Reply-To", "To", "Cc", "From", "Subject", "Date", "Message-Id", "MIME-Version"} {
 			if v, ok := e.Headers[h]; ok {
