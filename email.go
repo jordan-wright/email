@@ -16,6 +16,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
+	"net/http"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -271,6 +272,22 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 	ct := mime.TypeByExtension(filepath.Ext(filename))
 	basename := filepath.Base(filename)
 	return e.Attach(f, basename, ct)
+}
+
+// AttachFromUrl is used to attach content from url to the email.
+// It attempts to get the file referenced by url and, if successful, creates an Attachment.
+// This Attachment is then appended to the slice of Email.Attachments.
+// The function will then return the Attachment for reference, as well as nil for the error, if successful.
+func (e *Email) AttachFromUrl(url string, filename string) (a *Attachment, err error) {
+	var r *http.Response
+
+	r, err = http.Get(url)
+	if err != nil {
+		return
+	}
+	a, err = e.Attach(r.Body, filename, "")
+
+	return
 }
 
 // msgHeaders merges the Email's various fields and custom headers together in a
