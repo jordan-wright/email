@@ -1,8 +1,10 @@
 package email
 
 import (
+	"strings"
 	"testing"
 
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"io"
@@ -64,6 +66,74 @@ func TestEmailText(t *testing.T) {
 		t.Fatal("Content-type header is invalid: ", ct)
 	} else if mt != "text/plain" {
 		t.Fatalf("Content-type expected \"text/plain\", not %v", mt)
+	}
+}
+
+func TestEmailWithHTMLAttachments(t *testing.T) {
+	e := prepareEmail()
+
+	// Set plain text to exercise "mime/alternative"
+	e.Text = []byte("Text Body is, of course, supported!\n")
+
+	e.HTML = []byte("<html><body>This is a text.</body></html>")
+
+	// Set HTML attachment to exercise "mime/related".
+	attachment, err := e.Attach(bytes.NewBufferString("Rad attachment"), "rad.txt", "image/png; charset=utf-8")
+	if err != nil {
+		t.Fatal("Could not add an attachment to the message: ", err)
+	}
+	attachment.HTMLRelated = true
+
+	b, err := e.Bytes()
+	if err != nil {
+		t.Fatal("Could not serialize e-mail:", err)
+	}
+
+	// Print the bytes for ocular validation and make sure no errors.
+	//fmt.Println(string(b))
+
+	// TODO: Verify the attachments.
+	s := trimReader{rd: bytes.NewBuffer(b)}
+	tp := textproto.NewReader(bufio.NewReader(s))
+	// Parse the main headers
+	hdrs, err := tp.ReadMIMEHeader()
+	if err != nil {
+		t.Fatal("Could not parse the headers:", err)
+	}
+	// Recursively parse the MIME parts
+	ps, err := parseMIMEParts(hdrs, tp.R)
+	if err != nil {
+		t.Fatal("Could not parse the MIME parts recursively:", err)
+	}
+
+	plainTextFound := false
+	htmlFound := false
+	imageFound := false
+	if expected, actual := 3, len(ps); actual != expected {
+		t.Error("Unexpected number of parts. Expected:", expected, "Was:", actual)
+	}
+	for _, part := range ps {
+		// part has "header" and "body []byte"
+		ct := part.header.Get("Content-Type")
+		if strings.Contains(ct, "image/png") {
+			imageFound = true
+		}
+		if strings.Contains(ct, "text/html") {
+			htmlFound = true
+		}
+		if strings.Contains(ct, "text/plain") {
+			plainTextFound = true
+		}
+	}
+
+	if !plainTextFound {
+		t.Error("Did not find plain text part.")
+	}
+	if !htmlFound {
+		t.Error("Did not find HTML part.")
+	}
+	if !imageFound {
+		t.Error("Did not find image part.")
 	}
 }
 

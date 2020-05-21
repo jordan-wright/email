@@ -345,6 +345,17 @@ func writeMessage(buff io.Writer, msg []byte, multipart bool, mediaType string, 
 	return qp.Close()
 }
 
+func (e *Email) categorizeAttachments() (htmlRelated, others []*Attachment) {
+	for _, a := range e.Attachments {
+		if a.HTMLRelated {
+			htmlRelated = append(htmlRelated, a)
+		} else {
+			others = append(others, a)
+		}
+	}
+	return
+}
+
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
 	// TODO: better guess buffer size
@@ -355,8 +366,13 @@ func (e *Email) Bytes() ([]byte, error) {
 		return nil, err
 	}
 
+	htmlAttachments, otherAttachments := e.categorizeAttachments()
+	if len(e.HTML) == 0 && len(htmlAttachments) > 0 {
+		return nil, errors.New("there are HTML attachments, but no HTML body")
+	}
+
 	var (
-		isMixed       = len(e.Attachments) > 0
+		isMixed       = len(otherAttachments) > 0
 		isAlternative = len(e.Text) > 0 && len(e.HTML) > 0
 	)
 
@@ -406,9 +422,34 @@ func (e *Email) Bytes() ([]byte, error) {
 			}
 		}
 		if len(e.HTML) > 0 {
+			messageWriter := subWriter
+			var relatedWriter *multipart.Writer
+			if len(htmlAttachments) > 0 {
+				relatedWriter = multipart.NewWriter(buff)
+				header := textproto.MIMEHeader{
+					"Content-Type": {"multipart/related;\r\n boundary=" + relatedWriter.Boundary()},
+				}
+				if _, err := subWriter.CreatePart(header); err != nil {
+					return nil, err
+				}
+
+				messageWriter = relatedWriter
+			}
 			// Write the HTML
-			if err := writeMessage(buff, e.HTML, isMixed || isAlternative, "text/html", subWriter); err != nil {
+			if err := writeMessage(buff, e.HTML, isMixed || isAlternative, "text/html", messageWriter); err != nil {
 				return nil, err
+			}
+			if len(htmlAttachments) > 0 {
+				for _, a := range htmlAttachments {
+					ap, err := relatedWriter.CreatePart(a.Header)
+					if err != nil {
+						return nil, err
+					}
+					// Write the base64Wrapped content to the part
+					base64Wrap(ap, a.Content)
+				}
+
+				relatedWriter.Close()
 			}
 		}
 		if isMixed && isAlternative {
@@ -418,7 +459,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		}
 	}
 	// Create attachment part, if necessary
-	for _, a := range e.Attachments {
+	for _, a := range otherAttachments {
 		ap, err := w.CreatePart(a.Header)
 		if err != nil {
 			return nil, err
@@ -559,9 +600,10 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 // Attachment is a struct representing an email attachment.
 // Based on the mime/multipart.FileHeader struct, Attachment contains the name, MIMEHeader, and content of the attachment in question
 type Attachment struct {
-	Filename string
-	Header   textproto.MIMEHeader
-	Content  []byte
+	Filename    string
+	Header      textproto.MIMEHeader
+	Content     []byte
+	HTMLRelated bool
 }
 
 // base64Wrap encodes the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
