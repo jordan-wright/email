@@ -16,6 +16,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -478,16 +479,13 @@ func (e *Email) Bytes() ([]byte, error) {
 // Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
 // This function merges the To, Cc, and Bcc fields and calls the smtp.SendMail function using the Email.Bytes() output as the message
 func (e *Email) Send(addr string, a smtp.Auth) error {
+
 	// Merge the To, Cc, and Bcc fields
-	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
-	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
-	for i := 0; i < len(to); i++ {
-		addr, err := mail.ParseAddress(to[i])
-		if err != nil {
-			return err
-		}
-		to[i] = addr.Address
+	to, err := e.ParsedAddresses()
+	if err != nil {
+		return err
 	}
+
 	// Check to make sure there is at least one recipient and one "From" address
 	if e.From == "" || len(to) == 0 {
 		return errors.New("Must specify at least one From address and one To address")
@@ -520,20 +518,134 @@ func (e *Email) parseSender() (string, error) {
 	}
 }
 
-// SendWithTLS sends an email with an optional TLS config.
-// This is helpful if you need to connect to a host that is used an untrusted
-// certificate.
-func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
+// Returns slice of To, Cc, and Bcc fields, each parsed with mail.ParseAddress()
+func (e *Email) ParsedAddresses() ([]string, error) {
+
 	// Merge the To, Cc, and Bcc fields
 	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
 	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
 	for i := 0; i < len(to); i++ {
 		addr, err := mail.ParseAddress(to[i])
 		if err != nil {
-			return err
+			return []string{}, err
 		}
 		to[i] = addr.Address
 	}
+
+	return to, nil
+}
+
+/*
+SendWithConn sends an email with an existing connection.
+This is helpful if you need to customize connection parameters (timeouts and such),
+or use a custom Conn interface.
+
+	pSTARTTLSCfg provided: Performs STARTTLS negotiation
+	   pSTARTTLSCfg = nil: Skips STARTTLS negotiation
+		 	                 (for already-encrypted connections, or unencrypted ones)
+
+Typical STARTTLS upgrade:
+
+   HOSTNAME := "mailserver.com"
+   AUTH     := smtp.PlainAuth("", Username, Password, HOSTNAME)
+   pTLSCfg  := &tls.Config{ ... }
+
+   // NOTE: Returns an *unencrypted* net.Conn
+   pConn, _ := net.Dial("tcp4", HOSTNAME + ":587")
+
+   // Provide a *tls.Config to upgrade the connection via STARTTLS negotiation
+   pMsg.Email.SendWithConn(pConn, AUTH, HOSTNAME, pTLSCfg)
+
+Or, provide a nil *tls.Config to send unencrypted:
+
+   pMsg.Email.SendWithConn(pConn, AUTH, HOSTNAME, nil)
+
+Or, begin with a TLS/SSL connection in the first place:
+
+   // NOTE: Returns an *encrypted* tls.Conn
+   pConn, _ := tls.Dial("tcp4", HOSTNAME + ":465", pTLSCfg)
+
+   // No need to provied *tls.Config to upgrade the connection, since it's already encrypted
+   pMsg.Email.SendWithConn(pConn, AUTH, HOSTNAME, nil)
+
+*/
+func (e *Email) SendWithConn(
+	iConn         net.Conn,
+	iAuth         smtp.Auth,
+	serverName    string,
+	pSTARTTLSCfg  *tls.Config,
+) (err error) {
+
+	// Merge the To, Cc, and Bcc fields
+	to, err := e.ParsedAddresses()
+	if err != nil { return }
+
+	// Check to make sure there is at least one recipient and one "From" address
+	if e.From == "" || len(to) == 0 {
+		return errors.New("Must specify at least one From address and one To address")
+	}
+
+	sender, err := e.parseSender()
+	if err != nil { return }
+
+	raw, err := e.Bytes()
+	if err != nil { return }
+
+	c, err := smtp.NewClient(iConn, serverName)
+	if err != nil { return }
+	defer c.Close()
+
+	err = c.Hello("localhost")
+	if err != nil { return }
+
+	// NEGOTIATE STARTTLS IF REQUESTED & AVAILABLE
+	if pSTARTTLSCfg != nil {
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			err = c.StartTLS(pSTARTTLSCfg)
+			if err != nil { return }
+		}
+		// TODO: Perhaps have optional error if STARTTLS is requested by
+		//       the client, but not provided by the server
+	}
+
+	if iAuth != nil {
+		if ok, _ := c.Extension("AUTH"); ok {
+			err = c.Auth(iAuth)
+			if err != nil { return }
+		}
+	}
+
+	err = c.Mail(sender)
+	if err != nil { return }
+
+	for _, szRecipient := range to {
+		err = c.Rcpt(szRecipient)
+		if err != nil { return }
+	}
+
+	w, err := c.Data()
+	if err != nil { return }
+
+	_, err = w.Write(raw)
+	if err != nil { return }
+
+	err = w.Close()
+	if err != nil { return }
+
+	return c.Quit()
+}
+
+// SendWithTLS sends an email with an optional TLS config.
+// This is helpful if you need to connect to a host that is used an untrusted
+// certificate.
+func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
+
+	// Merge the To, Cc, and Bcc fields
+	to, err := e.ParsedAddresses()
+	if err != nil {
+		return err
+	}
+
 	// Check to make sure there is at least one recipient and one "From" address
 	if e.From == "" || len(to) == 0 {
 		return errors.New("Must specify at least one From address and one To address")
