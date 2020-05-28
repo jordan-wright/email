@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -51,6 +52,38 @@ type Email struct {
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
+
+	initFunc sync.Once
+	bufPool  *bufferPool
+}
+
+func (e *Email) init() {
+	e.initFunc.Do(func() {
+		e.bufPool = newBufferPool()
+	})
+}
+
+type bufferPool struct {
+	p sync.Pool
+}
+
+func newBufferPool() *bufferPool {
+	return &bufferPool{
+		sync.Pool{
+			New: func() interface{} {
+				return bytes.NewBuffer(nil)
+			},
+		},
+	}
+}
+
+func (p *bufferPool) Borrow() *bytes.Buffer {
+	return p.p.Get().(*bytes.Buffer)
+}
+
+func (p *bufferPool) HandBack(b *bytes.Buffer) {
+	b.Reset()
+	p.p.Put(b)
 }
 
 // part is a copyable representation of a multipart.Part
@@ -61,7 +94,9 @@ type part struct {
 
 // NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
-	return &Email{Headers: textproto.MIMEHeader{}}
+	e := &Email{Headers: textproto.MIMEHeader{}}
+	e.init() // better do it now if we can
+	return e
 }
 
 // trimReader is a custom io.Reader that will trim any leading
@@ -142,7 +177,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 	e.Headers = hdrs
 	body := tp.R
 	// Recursively parse the MIME parts
-	ps, err := parseMIMEParts(e.Headers, body)
+	ps, err := parseMIMEParts(e.Headers, body, e.bufPool)
 	if err != nil {
 		return e, err
 	}
@@ -168,7 +203,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 // each (flattened) mime.Part found.
 // It is important to note that there are no limits to the number of recursions, so be
 // careful when parsing unknown MIME structures!
-func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
+func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader, bufPool *bufferPool) ([]*part, error) {
 	var ps []*part
 	// If no content type is given, set it to the default
 	if _, ok := hs["Content-Type"]; !ok {
@@ -185,7 +220,7 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 		}
 		mr := multipart.NewReader(b, params["boundary"])
 		for {
-			var buf bytes.Buffer
+			buf := bufPool.Borrow()
 			p, err := mr.NextPart()
 			if err == io.EOF {
 				break
@@ -201,7 +236,7 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 				return ps, err
 			}
 			if strings.HasPrefix(subct, "multipart/") {
-				sps, err := parseMIMEParts(p.Header, p)
+				sps, err := parseMIMEParts(p.Header, p, bufPool)
 				if err != nil {
 					return ps, err
 				}
@@ -215,19 +250,21 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 				}
 				// Otherwise, just append the part to the list
 				// Copy the part data into the buffer
-				if _, err := io.Copy(&buf, reader); err != nil {
+				if _, err := io.Copy(buf, reader); err != nil {
 					return ps, err
 				}
-				ps = append(ps, &part{body: buf.Bytes(), header: p.Header})
+				ps = append(ps, &part{body: append([]byte(nil), buf.Bytes()...), header: p.Header})
 			}
+			bufPool.HandBack(buf)
 		}
 	} else {
 		// If it is not a multipart email, parse the body content as a single "part"
-		var buf bytes.Buffer
-		if _, err := io.Copy(&buf, b); err != nil {
+		buf := bufPool.Borrow()
+		if _, err := io.Copy(buf, b); err != nil {
 			return ps, err
 		}
-		ps = append(ps, &part{body: buf.Bytes(), header: hs})
+		ps = append(ps, &part{body: append([]byte(nil), buf.Bytes()...), header: hs})
+		bufPool.HandBack(buf)
 	}
 	return ps, nil
 }
@@ -236,14 +273,16 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 // Required parameters include an io.Reader, the desired filename for the attachment, and the Content-Type
 // The function will return the created Attachment for reference, as well as nil for the error, if successful.
 func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, err error) {
-	var buffer bytes.Buffer
-	if _, err = io.Copy(&buffer, r); err != nil {
+	e.init()
+
+	buffer := e.bufPool.Borrow()
+	if _, err = io.Copy(buffer, r); err != nil {
 		return
 	}
 	at := &Attachment{
 		Filename: filename,
 		Header:   textproto.MIMEHeader{},
-		Content:  buffer.Bytes(),
+		Content:  append([]byte(nil), buffer.Bytes()...),
 	}
 	if c != "" {
 		at.Header.Set("Content-Type", c)
@@ -254,6 +293,9 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 	at.Header.Set("Content-ID", fmt.Sprintf("<%s>", filename))
 	at.Header.Set("Content-Transfer-Encoding", "base64")
 	e.Attachments = append(e.Attachments, at)
+
+	e.bufPool.HandBack(buffer)
+
 	return at, nil
 }
 
@@ -358,8 +400,8 @@ func (e *Email) categorizeAttachments() (htmlRelated, others []*Attachment) {
 
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
-	// TODO: better guess buffer size
-	buff := bytes.NewBuffer(make([]byte, 0, 4096))
+	e.init()
+	buff := e.bufPool.Borrow()
 
 	headers, err := e.msgHeaders()
 	if err != nil {
@@ -472,7 +514,10 @@ func (e *Email) Bytes() ([]byte, error) {
 			return nil, err
 		}
 	}
-	return buff.Bytes(), nil
+
+	result := append([]byte(nil), buff.Bytes()...)
+	e.bufPool.HandBack(buff)
+	return result, nil
 }
 
 // Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
