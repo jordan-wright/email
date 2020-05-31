@@ -223,6 +223,10 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 		}
 	} else {
 		// If it is not a multipart email, parse the body content as a single "part"
+		if hs.Get("Content-Transfer-Encoding") == "quoted-printable" {
+			b = quotedprintable.NewReader(b)
+
+		}
 		var buf bytes.Buffer
 		if _, err := io.Copy(&buf, b); err != nil {
 			return ps, err
