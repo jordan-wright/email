@@ -154,6 +154,20 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 		if err != nil {
 			return e, err
 		}
+		// Check if part is an attachment based on the existence of the Content-Disposition header with a value of "attachment".
+		if cd := p.header.Get("Content-Disposition"); cd != "" {
+			cd, params, err := mime.ParseMediaType(p.header.Get("Content-Disposition"))
+			if err != nil {
+				return e, err
+			}
+			if cd == "attachment" {
+				_, err = e.Attach(bytes.NewReader(p.body), params["filename"], ct)
+				if err != nil {
+					return e, err
+				}
+				continue
+			}
+		}
 		switch {
 		case ct == "text/plain":
 			e.Text = p.body
