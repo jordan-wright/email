@@ -1,6 +1,7 @@
 package email
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -314,6 +315,52 @@ func TestEmailAttachment(t *testing.T) {
 
 	if _, err = mixed.NextPart(); err != io.EOF {
 		t.Error("Expected only one attachment!")
+	}
+}
+
+func TestHeaderEncoding(t *testing.T) {
+	cases := []struct {
+		field string
+		have  string
+		want  string
+	}{
+		{
+			field: "From",
+			have:  "Needs Encóding <encoding@example.com>, Only ASCII <foo@example.com>",
+			want:  "=?UTF-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, Only ASCII <foo@example.com>\r\n",
+		},
+		{
+			field: "To",
+			have:  "Keith Moore <moore@cs.utk.edu>, Keld Jørn Simonsen <keld@dkuug.dk>",
+			want:  "Keith Moore <moore@cs.utk.edu>, =?UTF-8?q?Keld_J=C3=B8rn_Simonsen?= <keld@dkuug.dk>\r\n",
+		},
+		{
+			field: "Cc",
+			have:  "Needs Encóding <encoding@example.com>",
+			want:  "=?UTF-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>\r\n",
+		},
+		{
+			field: "Subject",
+			have:  "Subject with a 🐟",
+			want:  "=?UTF-8?q?Subject_with_a_=F0=9F=90=9F?=\r\n",
+		},
+		{
+			field: "Subject",
+			have:  "Subject with only ASCII",
+			want:  "Subject with only ASCII\r\n",
+		},
+	}
+	buff := &bytes.Buffer{}
+	for _, c := range cases {
+		header := make(textproto.MIMEHeader)
+		header.Add(c.field, c.have)
+		buff.Reset()
+		headerToBytes(buff, header)
+		want := fmt.Sprintf("%s: %s", c.field, c.want)
+		got := buff.String()
+		if got != want {
+			t.Errorf("invalid utf-8 header encoding. \nwant:%#v\ngot: %#v", want, got)
+		}
 	}
 }
 
