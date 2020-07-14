@@ -160,7 +160,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 			if err != nil {
 				return e, err
 			}
-			if cd == "attachment" {
+			if cd == "attachment" || cd == "inline" {
 				_, err = e.Attach(bytes.NewReader(p.body), params["filename"], ct)
 				if err != nil {
 					return e, err
