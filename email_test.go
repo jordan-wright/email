@@ -94,7 +94,7 @@ func TestEmailWithHTMLAttachments(t *testing.T) {
 	//fmt.Println(string(b))
 
 	// TODO: Verify the attachments.
-	s := trimReader{rd: bytes.NewBuffer(b)}
+	s := &trimReader{rd: bytes.NewBuffer(b)}
 	tp := textproto.NewReader(bufio.NewReader(s))
 	// Parse the main headers
 	hdrs, err := tp.ReadMIMEHeader()
@@ -528,7 +528,7 @@ d-printable decoding.</div>
 	}
 }
 
-func TestAttachmentEmailFromReader (t *testing.T) {
+func TestAttachmentEmailFromReader(t *testing.T) {
 	ex := &Email{
 		Subject: "Test Subject",
 		To:      []string{"Jordan Wright <jmwright798@gmail.com>"},
@@ -592,7 +592,7 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	if e.From != ex.From {
 		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
 	}
-	if len(e.Attachments) != 1  {
+	if len(e.Attachments) != 1 {
 		t.Fatalf("Incorrect number of attachments %d != %d", len(e.Attachments), 1)
 	}
 	if e.Attachments[0].Filename != a.Filename {
