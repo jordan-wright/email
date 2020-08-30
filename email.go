@@ -298,6 +298,21 @@ func (e *Email) AttachFile(filename string) (a *Attachment, err error) {
 	return e.Attach(f, basename, ct)
 }
 
+// AttachFileWithName is used to attach content to the email.
+// It attempts to open the file referenced by filePath and, if successful, creates an Attachment with the provided fileName.
+// This Attachment is then appended to the slice of Email.Attachments.
+// The function will then return the Attachment for reference, as well as nil for the error, if successful.
+func (e *Email) AttachFileWithName(filePath, fileName string) (a *Attachment, err error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	ct := mime.TypeByExtension(filepath.Ext(filePath))
+	return e.Attach(f, fileName, ct)
+}
+
 // msgHeaders merges the Email's various fields and custom headers together in a
 // standards compliant way to create a MIMEHeader to be used in the resulting
 // message. It does not alter e.Headers.

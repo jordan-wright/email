@@ -60,6 +60,12 @@ e := NewEmail()
 e.AttachFile("test.txt")
 ```
 
+#### Attaching a File with custom file name
+```go
+e := NewEmail()
+e.AttachFileWithName("internalName.txt", "publicName.txt")
+```
+
 #### A Pool of Reusable Connections
 ```go
 (var ch <-chan *email.Email)
