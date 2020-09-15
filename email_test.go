@@ -94,7 +94,7 @@ func TestEmailWithHTMLAttachments(t *testing.T) {
 	//fmt.Println(string(b))
 
 	// TODO: Verify the attachments.
-	s := trimReader{rd: bytes.NewBuffer(b)}
+	s := &trimReader{rd: bytes.NewBuffer(b)}
 	tp := textproto.NewReader(bufio.NewReader(s))
 	// Parse the main headers
 	hdrs, err := tp.ReadMIMEHeader()
