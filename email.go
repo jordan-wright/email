@@ -108,32 +108,41 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 			}
 			delete(hdrs, h)
 		case h == "To":
-			for _, to := range v {
-				tt, err := (&mime.WordDecoder{}).DecodeHeader(to)
-				if err == nil {
-					e.To = append(e.To, tt)
-				} else {
-					e.To = append(e.To, to)
+			for _, toA := range v {
+				w := strings.Split(toA, ",")
+				for _, to := range w {
+					tt, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(to))
+					if err == nil {
+						e.To = append(e.To, tt)
+					} else {
+						e.To = append(e.To, to)
+					}
 				}
 			}
 			delete(hdrs, h)
 		case h == "Cc":
-			for _, cc := range v {
-				tcc, err := (&mime.WordDecoder{}).DecodeHeader(cc)
-				if err == nil {
-					e.Cc = append(e.Cc, tcc)
-				} else {
-					e.Cc = append(e.Cc, cc)
+			for _, ccA := range v {
+				w := strings.Split(ccA, ",")
+				for _, cc := range w {
+					tcc, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(cc))
+					if err == nil {
+						e.Cc = append(e.Cc, tcc)
+					} else {
+						e.Cc = append(e.Cc, cc)
+					}
 				}
 			}
 			delete(hdrs, h)
 		case h == "Bcc":
-			for _, bcc := range v {
-				tbcc, err := (&mime.WordDecoder{}).DecodeHeader(bcc)
-				if err == nil {
-					e.Bcc = append(e.Bcc, tbcc)
-				} else {
-					e.Bcc = append(e.Bcc, bcc)
+			for _, bccA := range v {
+				w := strings.Split(bccA, ",")
+				for _, bcc := range w {
+					tbcc, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(bcc))
+					if err == nil {
+						e.Bcc = append(e.Bcc, tbcc)
+					} else {
+						e.Bcc = append(e.Bcc, bcc)
+					}
 				}
 			}
 			delete(hdrs, h)
