@@ -367,8 +367,10 @@ func TestHeaderEncoding(t *testing.T) {
 func TestEmailFromReader(t *testing.T) {
 	ex := &Email{
 		Subject: "Test Subject",
-		To:      []string{"Jordan Wright <jmwright798@gmail.com>"},
+		To:      []string{"Jordan Wright <jmwright798@gmail.com>", "also@example.com"},
 		From:    "Jordan Wright <jmwright798@gmail.com>",
+		Cc:      []string{"one@example.com", "Two <two@example.com>"},
+		Bcc:     []string{"three@example.com", "Four <four@example.com>"},
 		Text:    []byte("This is a test email with HTML Formatting. It also has very long lines so\nthat the content must be wrapped if using quoted-printable decoding.\n"),
 		HTML:    []byte("<div dir=\"ltr\">This is a test email with <b>HTML Formatting.</b>\u00a0It also has very long lines so that the content must be wrapped if using quoted-printable decoding.</div>\n"),
 	}
@@ -376,7 +378,9 @@ func TestEmailFromReader(t *testing.T) {
 	MIME-Version: 1.0
 Subject: Test Subject
 From: Jordan Wright <jmwright798@gmail.com>
-To: Jordan Wright <jmwright798@gmail.com>
+To: Jordan Wright <jmwright798@gmail.com>, also@example.com
+Cc: one@example.com, Two <two@example.com>
+Bcc: three@example.com, Four <four@example.com>
 Content-Type: multipart/alternative; boundary=001a114fb3fc42fd6b051f834280
 
 --001a114fb3fc42fd6b051f834280
@@ -410,7 +414,33 @@ d-printable decoding.</div>
 	if e.From != ex.From {
 		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
 	}
-
+	if len(e.To) != len(ex.To) {
+		t.Fatalf("Incorrect number of \"To\" addresses: %v != %v", len(e.To), len(ex.To))
+	}
+	if e.To[0] != ex.To[0] {
+		t.Fatalf("Incorrect \"To[0]\": %#q != %#q", e.To[0], ex.To[0])
+	}
+	if e.To[1] != ex.To[1] {
+		t.Fatalf("Incorrect \"To[1]\": %#q != %#q", e.To[1], ex.To[1])
+	}
+	if len(e.Cc) != len(ex.Cc) {
+		t.Fatalf("Incorrect number of \"Cc\" addresses: %v != %v", len(e.Cc), len(ex.Cc))
+	}
+	if e.Cc[0] != ex.Cc[0] {
+		t.Fatalf("Incorrect \"Cc[0]\": %#q != %#q", e.Cc[0], ex.Cc[0])
+	}
+	if e.Cc[1] != ex.Cc[1] {
+		t.Fatalf("Incorrect \"Cc[1]\": %#q != %#q", e.Cc[1], ex.Cc[1])
+	}
+	if len(e.Bcc) != len(ex.Bcc) {
+		t.Fatalf("Incorrect number of \"Bcc\" addresses: %v != %v", len(e.Bcc), len(ex.Bcc))
+	}
+	if e.Bcc[0] != ex.Bcc[0] {
+		t.Fatalf("Incorrect \"Bcc[0]\": %#q != %#q", e.Cc[0], ex.Cc[0])
+	}
+	if e.Bcc[1] != ex.Bcc[1] {
+		t.Fatalf("Incorrect \"Bcc[1]\": %#q != %#q", e.Bcc[1], ex.Bcc[1])
+	}
 }
 
 func TestNonAsciiEmailFromReader(t *testing.T) {
