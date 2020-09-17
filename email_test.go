@@ -570,6 +570,10 @@ func TestAttachmentEmailFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error attaching image %s", err.Error())
 	}
+	b, err := ex.Attach(bytes.NewReader([]byte("Let's just pretend this is raw JPEG data.")), "cat-inline.jpeg", "image/jpeg")
+	if err != nil {
+		t.Fatalf("Error attaching inline image %s", err.Error())
+	}
 	raw := []byte(`
 From: Jordan Wright <jmwright798@gmail.com>
 Date: Thu, 17 Oct 2019 08:55:37 +0100
@@ -605,6 +609,15 @@ Content-Type: image/jpeg
 
 TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 
+--35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
+Content-Disposition: inline;
+ filename="cat-inline.jpeg"
+Content-Id: <cat-inline.jpeg>
+Content-Transfer-Encoding: base64
+Content-Type: image/jpeg
+
+TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
+
 --35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7--`)
 	e, err := NewEmailFromReader(bytes.NewReader(raw))
 	if err != nil {
@@ -622,7 +635,7 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	if e.From != ex.From {
 		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
 	}
-	if len(e.Attachments) != 1 {
+	if len(e.Attachments) != 2 {
 		t.Fatalf("Incorrect number of attachments %d != %d", len(e.Attachments), 1)
 	}
 	if e.Attachments[0].Filename != a.Filename {
@@ -630,6 +643,12 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	}
 	if !bytes.Equal(e.Attachments[0].Content, a.Content) {
 		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[0].Content, a.Content)
+	}
+	if e.Attachments[1].Filename != b.Filename {
+		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[1].Filename, b.Filename)
+	}
+	if !bytes.Equal(e.Attachments[1].Content, b.Content) {
+		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[1].Content, b.Content)
 	}
 }
 
