@@ -16,6 +16,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -51,6 +52,7 @@ type Email struct {
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
+	timeout     time.Duration
 }
 
 // part is a copyable representation of a multipart.Part
@@ -177,7 +179,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 				return e, err
 			}
 			filename, filenameDefined := params["filename"]
-			if cd == "attachment" || (cd == "inline" && filenameDefined){
+			if cd == "attachment" || (cd == "inline" && filenameDefined) {
 				_, err = e.Attach(bytes.NewReader(p.body), filename, ct)
 				if err != nil {
 					return e, err
@@ -555,6 +557,13 @@ func (e *Email) parseSender() (string, error) {
 	}
 }
 
+// Timeout sets a timeout to use in custom SendWith* functions.
+// Further calls to SendWith* functions reset this value.
+func (e *Email) Timeout(t time.Duration) *Email {
+	e.timeout = t
+	return e
+}
+
 // SendWithTLS sends an email over tls with an optional TLS config.
 //
 // The TLS Config is helpful if you need to connect to a host that is used an untrusted
@@ -583,7 +592,16 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 		return err
 	}
 
-	conn, err := tls.Dial("tcp", addr, t)
+	var conn *tls.Conn
+	if e.timeout == 0 {
+		conn, err = tls.Dial("tcp", addr, t)
+	} else {
+		dialer := net.Dialer{
+			Timeout: e.timeout,
+		}
+		e.timeout = 0
+		conn, err = tls.DialWithDialer(&dialer, "tcp", addr, t)
+	}
 	if err != nil {
 		return err
 	}
@@ -658,7 +676,18 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 
 	// Taken from the standard library
 	// https://github.com/golang/go/blob/master/src/net/smtp/smtp.go#L328
-	c, err := smtp.Dial(addr)
+	var c *smtp.Client
+	if e.timeout == 0 {
+		c, err = smtp.Dial(addr)
+	} else {
+		conn, err := net.DialTimeout("tcp", addr, e.timeout)
+		e.timeout = 0
+		if err != nil {
+			return err
+		}
+		host, _, _ := net.SplitHostPort(addr)
+		c, err = smtp.NewClient(conn, host)
+	}
 	if err != nil {
 		return err
 	}
