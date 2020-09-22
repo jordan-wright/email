@@ -598,10 +598,11 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 	}
 
 	if a != nil {
-		if ok, _ := c.Extension("AUTH"); ok {
-			if err = c.Auth(a); err != nil {
-				return err
-			}
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		if err = c.Auth(a); err != nil {
+			return err
 		}
 	}
 	if err = c.Mail(sender); err != nil {
@@ -665,18 +666,17 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 	if err = c.Hello("localhost"); err != nil {
 		return err
 	}
-	// Use TLS if available
 	if ok, _ := c.Extension("STARTTLS"); ok {
 		if err = c.StartTLS(t); err != nil {
 			return err
 		}
 	}
-
 	if a != nil {
-		if ok, _ := c.Extension("AUTH"); ok {
-			if err = c.Auth(a); err != nil {
-				return err
-			}
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		if err = c.Auth(a); err != nil {
+			return err
 		}
 	}
 	if err = c.Mail(sender); err != nil {
