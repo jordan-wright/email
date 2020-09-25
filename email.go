@@ -16,6 +16,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -51,6 +52,7 @@ type Email struct {
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
+	LocalName   string // override localname for client hello negotiation
 }
 
 // part is a copyable representation of a multipart.Part
@@ -61,7 +63,10 @@ type part struct {
 
 // NewEmail creates an Email, and returns the pointer to it.
 func NewEmail() *Email {
-	return &Email{Headers: textproto.MIMEHeader{}}
+	return &Email{
+		Headers:   textproto.MIMEHeader{},
+		LocalName: "localhost",
+	}
 }
 
 // trimReader is a custom io.Reader that will trim any leading
@@ -527,15 +532,58 @@ func (e *Email) Send(addr string, a smtp.Auth) error {
 	if e.From == "" || len(to) == 0 {
 		return errors.New("Must specify at least one From address and one To address")
 	}
-	sender, err := e.parseSender()
+	from, err := e.parseSender()
 	if err != nil {
 		return err
 	}
-	raw, err := e.Bytes()
+	msg, err := e.Bytes()
 	if err != nil {
 		return err
 	}
-	return smtp.SendMail(addr, a, sender, to, raw)
+	c, err := smtp.Dial(addr)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	if err = c.Hello(e.LocalName); err != nil {
+		return err
+	}
+	if ok, _ := c.Extension("STARTTLS"); ok {
+		host, _, _ := net.SplitHostPort(addr)
+		config := &tls.Config{ServerName: host}
+		if err = c.StartTLS(config); err != nil {
+			return err
+		}
+	}
+	if a != nil {
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		if err = c.Auth(a); err != nil {
+			return err
+		}
+	}
+	if err = c.Mail(from); err != nil {
+		return err
+	}
+	for _, addr := range to {
+		if err = c.Rcpt(addr); err != nil {
+			return err
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(msg)
+	if err != nil {
+		return err
+	}
+	err = w.Close()
+	if err != nil {
+		return err
+	}
+	return c.Quit()
 }
 
 // Select and parse an SMTP envelope sender address.  Choose Email.Sender if set, or fallback to Email.From.
@@ -593,7 +641,7 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 		return err
 	}
 	defer c.Close()
-	if err = c.Hello("localhost"); err != nil {
+	if err = c.Hello(e.LocalName); err != nil {
 		return err
 	}
 
@@ -662,7 +710,7 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 		return err
 	}
 	defer c.Close()
-	if err = c.Hello("localhost"); err != nil {
+	if err = c.Hello(e.LocalName); err != nil {
 		return err
 	}
 	// Use TLS if available
