@@ -40,9 +40,9 @@ func basicTests(t *testing.T, e *Email) *mail.Message {
 	}
 
 	expectedHeaders := map[string]string{
-		"To":      "test@example.com",
-		"From":    "Jordan Wright <test@example.com>",
-		"Cc":      "test_cc@example.com",
+		"To":      "<test@example.com>",
+		"From":    "\"Jordan Wright\" <test@example.com>",
+		"Cc":      "<test_cc@example.com>",
 		"Subject": "Awesome Subject",
 	}
 
@@ -327,17 +327,17 @@ func TestHeaderEncoding(t *testing.T) {
 		{
 			field: "From",
 			have:  "Needs Encóding <encoding@example.com>, Only ASCII <foo@example.com>",
-			want:  "=?UTF-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, Only ASCII <foo@example.com>\r\n",
+			want:  "=?utf-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, \"Only ASCII\" <foo@example.com>\r\n",
 		},
 		{
 			field: "To",
 			have:  "Keith Moore <moore@cs.utk.edu>, Keld Jørn Simonsen <keld@dkuug.dk>",
-			want:  "Keith Moore <moore@cs.utk.edu>, =?UTF-8?q?Keld_J=C3=B8rn_Simonsen?= <keld@dkuug.dk>\r\n",
+			want:  "\"Keith Moore\" <moore@cs.utk.edu>, =?utf-8?q?Keld_J=C3=B8rn_Simonsen?= <keld@dkuug.dk>\r\n",
 		},
 		{
 			field: "Cc",
-			have:  "Needs Encóding <encoding@example.com>",
-			want:  "=?UTF-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>\r\n",
+			have:  "Needs Encóding <encoding@example.com>, \"Test :)\" <test@localhost>",
+			want:  "=?utf-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, \"Test :)\" <test@localhost>\r\n",
 		},
 		{
 			field: "Subject",

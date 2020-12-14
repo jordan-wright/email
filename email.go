@@ -753,9 +753,7 @@ func headerToBytes(buff io.Writer, header textproto.MIMEHeader) {
 					if err != nil {
 						continue
 					}
-					if addr.Name != "" {
-						participants[i] = fmt.Sprintf("%s <%s>", mime.QEncoding.Encode("UTF-8", addr.Name), addr.Address)
-					}
+					participants[i] = addr.String()
 				}
 				buff.Write([]byte(strings.Join(participants, ", ")))
 			default:
