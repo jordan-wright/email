@@ -276,18 +276,11 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 		return
 	}
 	at := &Attachment{
-		Filename: filename,
-		Header:   textproto.MIMEHeader{},
-		Content:  buffer.Bytes(),
+		Filename:    filename,
+		ContentType: c,
+		Header:      textproto.MIMEHeader{},
+		Content:     buffer.Bytes(),
 	}
-	if c != "" {
-		at.Header.Set("Content-Type", c)
-	} else {
-		at.Header.Set("Content-Type", "application/octet-stream")
-	}
-	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=\"%s\"", filename))
-	at.Header.Set("Content-ID", fmt.Sprintf("<%s>", filename))
-	at.Header.Set("Content-Transfer-Encoding", "base64")
 	e.Attachments = append(e.Attachments, at)
 	return at, nil
 }
@@ -476,6 +469,7 @@ func (e *Email) Bytes() ([]byte, error) {
 			}
 			if len(htmlAttachments) > 0 {
 				for _, a := range htmlAttachments {
+					a.setDefaultHeaders()
 					ap, err := relatedWriter.CreatePart(a.Header)
 					if err != nil {
 						return nil, err
@@ -495,6 +489,7 @@ func (e *Email) Bytes() ([]byte, error) {
 	}
 	// Create attachment part, if necessary
 	for _, a := range otherAttachments {
+		a.setDefaultHeaders()
 		ap, err := w.CreatePart(a.Header)
 		if err != nil {
 			return nil, err
@@ -706,9 +701,32 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 // Based on the mime/multipart.FileHeader struct, Attachment contains the name, MIMEHeader, and content of the attachment in question
 type Attachment struct {
 	Filename    string
+	ContentType string
 	Header      textproto.MIMEHeader
 	Content     []byte
 	HTMLRelated bool
+}
+
+func (at *Attachment) setDefaultHeaders() {
+	contentType := "application/octet-stream"
+	if len(at.ContentType) > 0 {
+		contentType = at.ContentType
+	}
+	at.Header.Set("Content-Type", contentType)
+
+	if len(at.Header.Get("Content-Disposition")) == 0 {
+		disposition := "attachment"
+		if at.HTMLRelated {
+			disposition = "inline"
+		}
+		at.Header.Set("Content-Disposition", fmt.Sprintf("%s;\r\n filename=\"%s\"", disposition, at.Filename))
+	}
+	if len(at.Header.Get("Content-ID")) == 0 {
+		at.Header.Set("Content-ID", fmt.Sprintf("<%s>", at.Filename))
+	}
+	if len(at.Header.Get("Content-Transfer-Encoding")) == 0 {
+		at.Header.Set("Content-Transfer-Encoding", "base64")
+	}
 }
 
 // base64Wrap encodes the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
