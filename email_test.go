@@ -115,8 +115,9 @@ func TestEmailWithHTMLAttachments(t *testing.T) {
 	}
 	for _, part := range ps {
 		// part has "header" and "body []byte"
+		cd := part.header.Get("Content-Disposition")
 		ct := part.header.Get("Content-Type")
-		if strings.Contains(ct, "image/png") {
+		if strings.Contains(ct, "image/png") && strings.HasPrefix(cd, "inline") {
 			imageFound = true
 		}
 		if strings.Contains(ct, "text/html") {
@@ -371,9 +372,13 @@ func TestEmailAttachment(t *testing.T) {
 	mixed := multipart.NewReader(msg.Body, params["boundary"])
 
 	// Check attachments.
-	_, err = mixed.NextPart()
+	a, err := mixed.NextPart()
 	if err != nil {
 		t.Fatalf("Could not find attachment component of email: %s", err)
+	}
+
+	if !strings.HasPrefix(a.Header.Get("Content-Disposition"), "attachment") {
+		t.Fatalf("Content disposition is not attachment: %s", a.Header.Get("Content-Disposition"))
 	}
 
 	if _, err = mixed.NextPart(); err != io.EOF {
