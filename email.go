@@ -177,7 +177,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 				return e, err
 			}
 			filename, filenameDefined := params["filename"]
-			if cd == "attachment" || (cd == "inline" && filenameDefined){
+			if cd == "attachment" || (cd == "inline" && filenameDefined) {
 				_, err = e.Attach(bytes.NewReader(p.body), filename, ct)
 				if err != nil {
 					return e, err
@@ -409,10 +409,11 @@ func (e *Email) Bytes() ([]byte, error) {
 	var (
 		isMixed       = len(otherAttachments) > 0
 		isAlternative = len(e.Text) > 0 && len(e.HTML) > 0
+		isRelated     = len(e.HTML) > 0 && len(htmlAttachments) > 0
 	)
 
 	var w *multipart.Writer
-	if isMixed || isAlternative {
+	if isMixed || isAlternative || isRelated {
 		w = multipart.NewWriter(buff)
 	}
 	switch {
@@ -420,6 +421,8 @@ func (e *Email) Bytes() ([]byte, error) {
 		headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
 	case isAlternative:
 		headers.Set("Content-Type", "multipart/alternative;\r\n boundary="+w.Boundary())
+	case isRelated:
+		headers.Set("Content-Type", "multipart/related;\r\n boundary="+w.Boundary())
 	case len(e.HTML) > 0:
 		headers.Set("Content-Type", "text/html; charset=UTF-8")
 		headers.Set("Content-Transfer-Encoding", "quoted-printable")
@@ -459,7 +462,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		if len(e.HTML) > 0 {
 			messageWriter := subWriter
 			var relatedWriter *multipart.Writer
-			if len(htmlAttachments) > 0 {
+			if (isMixed || isAlternative) && len(htmlAttachments) > 0 {
 				relatedWriter = multipart.NewWriter(buff)
 				header := textproto.MIMEHeader{
 					"Content-Type": {"multipart/related;\r\n boundary=" + relatedWriter.Boundary()},
@@ -469,9 +472,12 @@ func (e *Email) Bytes() ([]byte, error) {
 				}
 
 				messageWriter = relatedWriter
+			} else if isRelated && len(htmlAttachments) > 0 {
+				relatedWriter = w
+				messageWriter = w
 			}
 			// Write the HTML
-			if err := writeMessage(buff, e.HTML, isMixed || isAlternative, "text/html", messageWriter); err != nil {
+			if err := writeMessage(buff, e.HTML, isMixed || isAlternative || isRelated, "text/html", messageWriter); err != nil {
 				return nil, err
 			}
 			if len(htmlAttachments) > 0 {
@@ -484,7 +490,9 @@ func (e *Email) Bytes() ([]byte, error) {
 					base64Wrap(ap, a.Content)
 				}
 
-				relatedWriter.Close()
+				if isMixed || isAlternative {
+					relatedWriter.Close()
+				}
 			}
 		}
 		if isMixed && isAlternative {
@@ -502,7 +510,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		// Write the base64Wrapped content to the part
 		base64Wrap(ap, a.Content)
 	}
-	if isMixed || isAlternative {
+	if isMixed || isAlternative || isRelated {
 		if err := w.Close(); err != nil {
 			return nil, err
 		}

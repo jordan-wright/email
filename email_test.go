@@ -138,6 +138,69 @@ func TestEmailWithHTMLAttachments(t *testing.T) {
 	}
 }
 
+func TestEmailWithHTMLAttachmentsHTMLOnly(t *testing.T) {
+	e := prepareEmail()
+
+	e.HTML = []byte("<html><body>This is a text.</body></html>")
+
+	// Set HTML attachment to exercise "mime/related".
+	attachment, err := e.Attach(bytes.NewBufferString("Rad attachment"), "rad.txt", "image/png; charset=utf-8")
+	if err != nil {
+		t.Fatal("Could not add an attachment to the message: ", err)
+	}
+	attachment.HTMLRelated = true
+
+	b, err := e.Bytes()
+	if err != nil {
+		t.Fatal("Could not serialize e-mail:", err)
+	}
+
+	// Print the bytes for ocular validation and make sure no errors.
+	//fmt.Println(string(b))
+
+	// TODO: Verify the attachments.
+	s := &trimReader{rd: bytes.NewBuffer(b)}
+	tp := textproto.NewReader(bufio.NewReader(s))
+	// Parse the main headers
+	hdrs, err := tp.ReadMIMEHeader()
+	if err != nil {
+		t.Fatal("Could not parse the headers:", err)
+	}
+
+	if !strings.HasPrefix(hdrs.Get("Content-Type"), "multipart/related") {
+		t.Error("Envelope Content-Type is not multipart/related: ", hdrs["Content-Type"])
+	}
+
+	// Recursively parse the MIME parts
+	ps, err := parseMIMEParts(hdrs, tp.R)
+	if err != nil {
+		t.Fatal("Could not parse the MIME parts recursively:", err)
+	}
+
+	htmlFound := false
+	imageFound := false
+	if expected, actual := 2, len(ps); actual != expected {
+		t.Error("Unexpected number of parts. Expected:", expected, "Was:", actual)
+	}
+	for _, part := range ps {
+		// part has "header" and "body []byte"
+		ct := part.header.Get("Content-Type")
+		if strings.Contains(ct, "image/png") {
+			imageFound = true
+		}
+		if strings.Contains(ct, "text/html") {
+			htmlFound = true
+		}
+	}
+
+	if !htmlFound {
+		t.Error("Did not find HTML part.")
+	}
+	if !imageFound {
+		t.Error("Did not find image part.")
+	}
+}
+
 func TestEmailHTML(t *testing.T) {
 	e := prepareEmail()
 	e.HTML = []byte("<h1>Fancy Html is supported, too!</h1>\n")
