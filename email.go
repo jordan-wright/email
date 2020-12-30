@@ -85,6 +85,22 @@ func (tr *trimReader) Read(buf []byte) (int, error) {
 	return n, err
 }
 
+func handleAddressList(v []string) []string {
+	res := []string{}
+	for _, a := range v {
+		w := strings.Split(a, ",")
+		for _, addr := range w {
+			decodedAddr, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(addr))
+			if err == nil {
+				res = append(res, decodedAddr)
+			} else {
+				res = append(res, addr)
+			}
+		}
+	}
+	return res
+}
+
 // NewEmailFromReader reads a stream of bytes from an io.Reader, r,
 // and returns an email struct containing the parsed data.
 // This function expects the data in RFC 5322 format.
@@ -99,54 +115,27 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 	}
 	// Set the subject, to, cc, bcc, and from
 	for h, v := range hdrs {
-		switch {
-		case h == "Subject":
+		switch h {
+		case "Subject":
 			e.Subject = v[0]
 			subj, err := (&mime.WordDecoder{}).DecodeHeader(e.Subject)
 			if err == nil && len(subj) > 0 {
 				e.Subject = subj
 			}
 			delete(hdrs, h)
-		case h == "To":
-			for _, toA := range v {
-				w := strings.Split(toA, ",")
-				for _, to := range w {
-					tt, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(to))
-					if err == nil {
-						e.To = append(e.To, tt)
-					} else {
-						e.To = append(e.To, to)
-					}
-				}
-			}
+		case "To":
+			e.To = handleAddressList(v)
 			delete(hdrs, h)
-		case h == "Cc":
-			for _, ccA := range v {
-				w := strings.Split(ccA, ",")
-				for _, cc := range w {
-					tcc, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(cc))
-					if err == nil {
-						e.Cc = append(e.Cc, tcc)
-					} else {
-						e.Cc = append(e.Cc, cc)
-					}
-				}
-			}
+		case "Cc":
+			e.Cc = handleAddressList(v)
 			delete(hdrs, h)
-		case h == "Bcc":
-			for _, bccA := range v {
-				w := strings.Split(bccA, ",")
-				for _, bcc := range w {
-					tbcc, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(bcc))
-					if err == nil {
-						e.Bcc = append(e.Bcc, tbcc)
-					} else {
-						e.Bcc = append(e.Bcc, bcc)
-					}
-				}
-			}
+		case "Bcc":
+			e.Bcc = handleAddressList(v)
 			delete(hdrs, h)
-		case h == "From":
+		case "Reply-To":
+			e.ReplyTo = handleAddressList(v)
+			delete(hdrs, h)
+		case "From":
 			e.From = v[0]
 			fr, err := (&mime.WordDecoder{}).DecodeHeader(e.From)
 			if err == nil && len(fr) > 0 {
