@@ -437,6 +437,7 @@ func TestEmailFromReader(t *testing.T) {
 		Subject: "Test Subject",
 		To:      []string{"Jordan Wright <jmwright798@gmail.com>", "also@example.com"},
 		From:    "Jordan Wright <jmwright798@gmail.com>",
+		ReplyTo: []string{"Jordan Wright <jmwright798@gmail.com>"},
 		Cc:      []string{"one@example.com", "Two <two@example.com>"},
 		Bcc:     []string{"three@example.com", "Four <four@example.com>"},
 		Text:    []byte("This is a test email with HTML Formatting. It also has very long lines so\nthat the content must be wrapped if using quoted-printable decoding.\n"),
@@ -446,6 +447,7 @@ func TestEmailFromReader(t *testing.T) {
 	MIME-Version: 1.0
 Subject: Test Subject
 From: Jordan Wright <jmwright798@gmail.com>
+Reply-To: Jordan Wright <jmwright798@gmail.com>
 To: Jordan Wright <jmwright798@gmail.com>, also@example.com
 Cc: one@example.com, Two <two@example.com>
 Bcc: three@example.com, Four <four@example.com>
@@ -508,6 +510,12 @@ d-printable decoding.</div>
 	}
 	if e.Bcc[1] != ex.Bcc[1] {
 		t.Fatalf("Incorrect \"Bcc[1]\": %#q != %#q", e.Bcc[1], ex.Bcc[1])
+	}
+	if len(e.ReplyTo) != len(ex.ReplyTo) {
+		t.Fatalf("Incorrect number of \"Reply-To\" addresses: %v != %v", len(e.ReplyTo), len(ex.ReplyTo))
+	}
+	if e.ReplyTo[0] != ex.ReplyTo[0] {
+		t.Fatalf("Incorrect \"ReplyTo\": %#q != %#q", e.ReplyTo[0], ex.ReplyTo[0])
 	}
 }
 
