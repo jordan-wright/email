@@ -837,6 +837,28 @@ Testing!
 	}
 }
 
+func TestNoMultipartHTMLContentTypeBase64Encoding(t *testing.T) {
+	raw := []byte(`MIME-Version: 1.0
+From: no-reply@example.com
+To: tester@example.org
+Date: 7 Jan 2021 03:07:44 -0800
+Subject: Hello
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: base64
+Message-Id: <20210107110744.547DD70532@example.com>
+
+PGh0bWw+PGhlYWQ+PHRpdGxlPnRlc3Q8L3RpdGxlPjwvaGVhZD48Ym9keT5IZWxsbyB3
+b3JsZCE8L2JvZHk+PC9odG1sPg==
+`)
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("Error when parsing email %s", err.Error())
+	}
+	if !bytes.Equal(e.HTML, []byte("<html><head><title>test</title></head><body>Hello world!</body></html>")) {
+		t.Fatalf("Error incorrect text: %#q != %#q\n", e.Text, "<html>...</html>")
+	}
+}
+
 // *Since the mime library in use by ```email``` is now in the stdlib, this test is deprecated
 func Test_quotedPrintDecode(t *testing.T) {
 	text := []byte("Dear reader!\r\n\r\n" +
