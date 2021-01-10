@@ -16,6 +16,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
+	"net"
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
@@ -51,6 +52,7 @@ type Email struct {
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
+	timeout     time.Duration
 }
 
 // part is a copyable representation of a multipart.Part
@@ -549,6 +551,13 @@ func (e *Email) parseSender() (string, error) {
 	}
 }
 
+// Timeout sets a timeout to use in custom SendWith* functions.
+// Further calls to SendWith* functions reset this value.
+func (e *Email) Timeout(t time.Duration) *Email {
+	e.timeout = t
+	return e
+}
+
 // SendWithTLS sends an email over tls with an optional TLS config.
 //
 // The TLS Config is helpful if you need to connect to a host that is used an untrusted
@@ -577,7 +586,16 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 		return err
 	}
 
-	conn, err := tls.Dial("tcp", addr, t)
+	var conn *tls.Conn
+	if e.timeout == 0 {
+		conn, err = tls.Dial("tcp", addr, t)
+	} else {
+		dialer := net.Dialer{
+			Timeout: e.timeout,
+		}
+		e.timeout = 0
+		conn, err = tls.DialWithDialer(&dialer, "tcp", addr, t)
+	}
 	if err != nil {
 		return err
 	}
@@ -592,10 +610,11 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 	}
 
 	if a != nil {
-		if ok, _ := c.Extension("AUTH"); ok {
-			if err = c.Auth(a); err != nil {
-				return err
-			}
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		if err = c.Auth(a); err != nil {
+			return err
 		}
 	}
 	if err = c.Mail(sender); err != nil {
@@ -651,7 +670,18 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 
 	// Taken from the standard library
 	// https://github.com/golang/go/blob/master/src/net/smtp/smtp.go#L328
-	c, err := smtp.Dial(addr)
+	var c *smtp.Client
+	if e.timeout == 0 {
+		c, err = smtp.Dial(addr)
+	} else {
+		conn, err := net.DialTimeout("tcp", addr, e.timeout)
+		e.timeout = 0
+		if err != nil {
+			return err
+		}
+		host, _, _ := net.SplitHostPort(addr)
+		c, err = smtp.NewClient(conn, host)
+	}
 	if err != nil {
 		return err
 	}
@@ -659,18 +689,17 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 	if err = c.Hello("localhost"); err != nil {
 		return err
 	}
-	// Use TLS if available
 	if ok, _ := c.Extension("STARTTLS"); ok {
 		if err = c.StartTLS(t); err != nil {
 			return err
 		}
 	}
-
 	if a != nil {
-		if ok, _ := c.Extension("AUTH"); ok {
-			if err = c.Auth(a); err != nil {
-				return err
-			}
+		if ok, _ := c.Extension("AUTH"); !ok {
+			return errors.New("smtp: server doesn't support AUTH")
+		}
+		if err = c.Auth(a); err != nil {
+			return err
 		}
 	}
 	if err = c.Mail(sender); err != nil {
