@@ -85,6 +85,22 @@ func (tr *trimReader) Read(buf []byte) (int, error) {
 	return n, err
 }
 
+func handleAddressList(v []string) []string {
+	res := []string{}
+	for _, a := range v {
+		w := strings.Split(a, ",")
+		for _, addr := range w {
+			decodedAddr, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(addr))
+			if err == nil {
+				res = append(res, decodedAddr)
+			} else {
+				res = append(res, addr)
+			}
+		}
+	}
+	return res
+}
+
 // NewEmailFromReader reads a stream of bytes from an io.Reader, r,
 // and returns an email struct containing the parsed data.
 // This function expects the data in RFC 5322 format.
@@ -99,54 +115,27 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 	}
 	// Set the subject, to, cc, bcc, and from
 	for h, v := range hdrs {
-		switch {
-		case h == "Subject":
+		switch h {
+		case "Subject":
 			e.Subject = v[0]
 			subj, err := (&mime.WordDecoder{}).DecodeHeader(e.Subject)
 			if err == nil && len(subj) > 0 {
 				e.Subject = subj
 			}
 			delete(hdrs, h)
-		case h == "To":
-			for _, toA := range v {
-				w := strings.Split(toA, ",")
-				for _, to := range w {
-					tt, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(to))
-					if err == nil {
-						e.To = append(e.To, tt)
-					} else {
-						e.To = append(e.To, to)
-					}
-				}
-			}
+		case "To":
+			e.To = handleAddressList(v)
 			delete(hdrs, h)
-		case h == "Cc":
-			for _, ccA := range v {
-				w := strings.Split(ccA, ",")
-				for _, cc := range w {
-					tcc, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(cc))
-					if err == nil {
-						e.Cc = append(e.Cc, tcc)
-					} else {
-						e.Cc = append(e.Cc, cc)
-					}
-				}
-			}
+		case "Cc":
+			e.Cc = handleAddressList(v)
 			delete(hdrs, h)
-		case h == "Bcc":
-			for _, bccA := range v {
-				w := strings.Split(bccA, ",")
-				for _, bcc := range w {
-					tbcc, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(bcc))
-					if err == nil {
-						e.Bcc = append(e.Bcc, tbcc)
-					} else {
-						e.Bcc = append(e.Bcc, bcc)
-					}
-				}
-			}
+		case "Bcc":
+			e.Bcc = handleAddressList(v)
 			delete(hdrs, h)
-		case h == "From":
+		case "Reply-To":
+			e.ReplyTo = handleAddressList(v)
+			delete(hdrs, h)
+		case "From":
 			e.From = v[0]
 			fr, err := (&mime.WordDecoder{}).DecodeHeader(e.From)
 			if err == nil && len(fr) > 0 {
@@ -177,7 +166,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 				return e, err
 			}
 			filename, filenameDefined := params["filename"]
-			if cd == "attachment" || (cd == "inline" && filenameDefined){
+			if cd == "attachment" || (cd == "inline" && filenameDefined) {
 				_, err = e.Attach(bytes.NewReader(p.body), filename, ct)
 				if err != nil {
 					return e, err
@@ -254,9 +243,11 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 		}
 	} else {
 		// If it is not a multipart email, parse the body content as a single "part"
-		if hs.Get("Content-Transfer-Encoding") == "quoted-printable" {
+		switch hs.Get("Content-Transfer-Encoding") {
+		case "quoted-printable":
 			b = quotedprintable.NewReader(b)
-
+		case "base64":
+			b = base64.NewDecoder(base64.StdEncoding, b)
 		}
 		var buf bytes.Buffer
 		if _, err := io.Copy(&buf, b); err != nil {
@@ -276,18 +267,11 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 		return
 	}
 	at := &Attachment{
-		Filename: filename,
-		Header:   textproto.MIMEHeader{},
-		Content:  buffer.Bytes(),
+		Filename:    filename,
+		ContentType: c,
+		Header:      textproto.MIMEHeader{},
+		Content:     buffer.Bytes(),
 	}
-	if c != "" {
-		at.Header.Set("Content-Type", c)
-	} else {
-		at.Header.Set("Content-Type", "application/octet-stream")
-	}
-	at.Header.Set("Content-Disposition", fmt.Sprintf("attachment;\r\n filename=\"%s\"", filename))
-	at.Header.Set("Content-ID", fmt.Sprintf("<%s>", filename))
-	at.Header.Set("Content-Transfer-Encoding", "base64")
 	e.Attachments = append(e.Attachments, at)
 	return at, nil
 }
@@ -409,10 +393,11 @@ func (e *Email) Bytes() ([]byte, error) {
 	var (
 		isMixed       = len(otherAttachments) > 0
 		isAlternative = len(e.Text) > 0 && len(e.HTML) > 0
+		isRelated     = len(e.HTML) > 0 && len(htmlAttachments) > 0
 	)
 
 	var w *multipart.Writer
-	if isMixed || isAlternative {
+	if isMixed || isAlternative || isRelated {
 		w = multipart.NewWriter(buff)
 	}
 	switch {
@@ -420,6 +405,8 @@ func (e *Email) Bytes() ([]byte, error) {
 		headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
 	case isAlternative:
 		headers.Set("Content-Type", "multipart/alternative;\r\n boundary="+w.Boundary())
+	case isRelated:
+		headers.Set("Content-Type", "multipart/related;\r\n boundary="+w.Boundary())
 	case len(e.HTML) > 0:
 		headers.Set("Content-Type", "text/html; charset=UTF-8")
 		headers.Set("Content-Transfer-Encoding", "quoted-printable")
@@ -459,7 +446,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		if len(e.HTML) > 0 {
 			messageWriter := subWriter
 			var relatedWriter *multipart.Writer
-			if len(htmlAttachments) > 0 {
+			if (isMixed || isAlternative) && len(htmlAttachments) > 0 {
 				relatedWriter = multipart.NewWriter(buff)
 				header := textproto.MIMEHeader{
 					"Content-Type": {"multipart/related;\r\n boundary=" + relatedWriter.Boundary()},
@@ -469,13 +456,17 @@ func (e *Email) Bytes() ([]byte, error) {
 				}
 
 				messageWriter = relatedWriter
+			} else if isRelated && len(htmlAttachments) > 0 {
+				relatedWriter = w
+				messageWriter = w
 			}
 			// Write the HTML
-			if err := writeMessage(buff, e.HTML, isMixed || isAlternative, "text/html", messageWriter); err != nil {
+			if err := writeMessage(buff, e.HTML, isMixed || isAlternative || isRelated, "text/html", messageWriter); err != nil {
 				return nil, err
 			}
 			if len(htmlAttachments) > 0 {
 				for _, a := range htmlAttachments {
+					a.setDefaultHeaders()
 					ap, err := relatedWriter.CreatePart(a.Header)
 					if err != nil {
 						return nil, err
@@ -484,7 +475,9 @@ func (e *Email) Bytes() ([]byte, error) {
 					base64Wrap(ap, a.Content)
 				}
 
-				relatedWriter.Close()
+				if isMixed || isAlternative {
+					relatedWriter.Close()
+				}
 			}
 		}
 		if isMixed && isAlternative {
@@ -495,6 +488,7 @@ func (e *Email) Bytes() ([]byte, error) {
 	}
 	// Create attachment part, if necessary
 	for _, a := range otherAttachments {
+		a.setDefaultHeaders()
 		ap, err := w.CreatePart(a.Header)
 		if err != nil {
 			return nil, err
@@ -502,7 +496,7 @@ func (e *Email) Bytes() ([]byte, error) {
 		// Write the base64Wrapped content to the part
 		base64Wrap(ap, a.Content)
 	}
-	if isMixed || isAlternative {
+	if isMixed || isAlternative || isRelated {
 		if err := w.Close(); err != nil {
 			return nil, err
 		}
@@ -706,9 +700,32 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 // Based on the mime/multipart.FileHeader struct, Attachment contains the name, MIMEHeader, and content of the attachment in question
 type Attachment struct {
 	Filename    string
+	ContentType string
 	Header      textproto.MIMEHeader
 	Content     []byte
 	HTMLRelated bool
+}
+
+func (at *Attachment) setDefaultHeaders() {
+	contentType := "application/octet-stream"
+	if len(at.ContentType) > 0 {
+		contentType = at.ContentType
+	}
+	at.Header.Set("Content-Type", contentType)
+
+	if len(at.Header.Get("Content-Disposition")) == 0 {
+		disposition := "attachment"
+		if at.HTMLRelated {
+			disposition = "inline"
+		}
+		at.Header.Set("Content-Disposition", fmt.Sprintf("%s;\r\n filename=\"%s\"", disposition, at.Filename))
+	}
+	if len(at.Header.Get("Content-ID")) == 0 {
+		at.Header.Set("Content-ID", fmt.Sprintf("<%s>", at.Filename))
+	}
+	if len(at.Header.Get("Content-Transfer-Encoding")) == 0 {
+		at.Header.Set("Content-Transfer-Encoding", "base64")
+	}
 }
 
 // base64Wrap encodes the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
@@ -753,9 +770,7 @@ func headerToBytes(buff io.Writer, header textproto.MIMEHeader) {
 					if err != nil {
 						continue
 					}
-					if addr.Name != "" {
-						participants[i] = fmt.Sprintf("%s <%s>", mime.QEncoding.Encode("UTF-8", addr.Name), addr.Address)
-					}
+					participants[i] = addr.String()
 				}
 				buff.Write([]byte(strings.Join(participants, ", ")))
 			default:
