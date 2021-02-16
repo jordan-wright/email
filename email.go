@@ -167,7 +167,7 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 			}
 			filename, filenameDefined := params["filename"]
 			if cd == "attachment" || (cd == "inline" && filenameDefined) {
-				_, err = e.Attach(bytes.NewReader(p.body), filename, ct)
+				_, err = e.AttachWithHeaders(bytes.NewReader(p.body), filename, ct, p.header)
 				if err != nil {
 					return e, err
 				}
@@ -262,6 +262,13 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 // Required parameters include an io.Reader, the desired filename for the attachment, and the Content-Type
 // The function will return the created Attachment for reference, as well as nil for the error, if successful.
 func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, err error) {
+	return e.AttachWithHeaders(r, filename, c, textproto.MIMEHeader{})
+}
+
+// AttachWithHeaders is used to attach content from an io.Reader to the email. Required parameters include an io.Reader,
+// the desired filename for the attachment, the Content-Type and the original MIME headers.
+// The function will return the created Attachment for reference, as well as nil for the error, if successful.
+func (e *Email) AttachWithHeaders(r io.Reader, filename string, c string, headers textproto.MIMEHeader) (a *Attachment, err error) {
 	var buffer bytes.Buffer
 	if _, err = io.Copy(&buffer, r); err != nil {
 		return
@@ -269,7 +276,7 @@ func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, e
 	at := &Attachment{
 		Filename:    filename,
 		ContentType: c,
-		Header:      textproto.MIMEHeader{},
+		Header:      headers,
 		Content:     buffer.Bytes(),
 	}
 	e.Attachments = append(e.Attachments, at)

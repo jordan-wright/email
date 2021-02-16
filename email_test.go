@@ -679,7 +679,7 @@ Content-Type: text/html; charset=UTF-8
 --35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
 Content-Disposition: attachment;
  filename="cat.jpeg"
-Content-Id: <cat.jpeg>
+Content-Id: <cat.content-id>
 Content-Transfer-Encoding: base64
 Content-Type: image/jpeg
 
@@ -688,7 +688,7 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 --35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
 Content-Disposition: inline;
  filename="cat-inline.jpeg"
-Content-Id: <cat-inline.jpeg>
+Content-Id: <cat-inline.content-id>
 Content-Transfer-Encoding: base64
 Content-Type: image/jpeg
 
@@ -720,11 +720,21 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	if !bytes.Equal(e.Attachments[0].Content, a.Content) {
 		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[0].Content, a.Content)
 	}
+	if e.Attachments[0].Header != nil {
+		if e.Attachments[0].Header.Get("Content-Id") != "<cat.content-id>" {
+			t.Fatalf("Incorrect attachment header Content-Id %s != %s", e.Attachments[0].Header.Get("Content-Id"), "<cat.content-id>")
+		}
+	}
 	if e.Attachments[1].Filename != b.Filename {
 		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[1].Filename, b.Filename)
 	}
 	if !bytes.Equal(e.Attachments[1].Content, b.Content) {
 		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[1].Content, b.Content)
+	}
+	if e.Attachments[1].Header != nil {
+		if e.Attachments[1].Header.Get("Content-Id") != "<cat-inline.content-id>" {
+			t.Fatalf("Incorrect attachment header Content-Id %s != %s", e.Attachments[1].Header.Get("Content-Id"), "<cat-inline.content-id>")
+		}
 	}
 }
 
