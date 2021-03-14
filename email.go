@@ -504,32 +504,51 @@ func (e *Email) Bytes() ([]byte, error) {
 	return buff.Bytes(), nil
 }
 
-// Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
-// This function merges the To, Cc, and Bcc fields and calls the smtp.SendMail function using the Email.Bytes() output as the message
-func (e *Email) Send(addr string, a smtp.Auth) error {
+type smtpInfo struct {
+	to []string
+	sender string
+	raw []byte
+}
+
+func (e *Email) generateSMTPInfo() (*smtpInfo, error) {
 	// Merge the To, Cc, and Bcc fields
 	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
 	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
 	for i := 0; i < len(to); i++ {
 		addr, err := mail.ParseAddress(to[i])
 		if err != nil {
-			return err
+			return nil, err
 		}
 		to[i] = addr.Address
 	}
 	// Check to make sure there is at least one recipient and one "From" address
 	if e.From == "" || len(to) == 0 {
-		return errors.New("Must specify at least one From address and one To address")
+		return nil, errors.New("Must specify at least one From address and one To address")
 	}
 	sender, err := e.parseSender()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	raw, err := e.Bytes()
 	if err != nil {
+		return nil, err
+	}
+
+	return &smtpInfo{
+		to: to,
+		sender: sender,
+		raw: raw}, err
+}
+
+// Send an email using the given host and SMTP auth (optional), returns any error thrown by smtp.SendMail
+// This function merges the To, Cc, and Bcc fields and calls the smtp.SendMail function using the Email.Bytes() output as the message
+func (e *Email) Send(addr string, a smtp.Auth) error {
+	s, err := e.generateSMTPInfo()
+	if err != nil {
 		return err
 	}
-	return smtp.SendMail(addr, a, sender, to, raw)
+
+	return smtp.SendMail(addr, a, s.sender, s.to, s.raw)
 }
 
 // Select and parse an SMTP envelope sender address.  Choose Email.Sender if set, or fallback to Email.From.
@@ -549,34 +568,40 @@ func (e *Email) parseSender() (string, error) {
 	}
 }
 
+func (e *Email) sendHelper(c *smtp.Client) error {
+	s, err := e.generateSMTPInfo()
+	if err != nil {
+		return err
+	}
+
+	if err := c.Mail(s.sender); err != nil {
+		return err
+	}
+	for _, addr := range s.to {
+		if err := c.Rcpt(addr); err != nil {
+			return err
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(s.raw)
+	if err != nil {
+		return err
+	}
+	err = w.Close()
+	if err != nil {
+		return err
+	}
+	return c.Quit()
+}
+
 // SendWithTLS sends an email over tls with an optional TLS config.
 //
 // The TLS Config is helpful if you need to connect to a host that is used an untrusted
 // certificate.
 func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
-	// Merge the To, Cc, and Bcc fields
-	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
-	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
-	for i := 0; i < len(to); i++ {
-		addr, err := mail.ParseAddress(to[i])
-		if err != nil {
-			return err
-		}
-		to[i] = addr.Address
-	}
-	// Check to make sure there is at least one recipient and one "From" address
-	if e.From == "" || len(to) == 0 {
-		return errors.New("Must specify at least one From address and one To address")
-	}
-	sender, err := e.parseSender()
-	if err != nil {
-		return err
-	}
-	raw, err := e.Bytes()
-	if err != nil {
-		return err
-	}
-
 	conn, err := tls.Dial("tcp", addr, t)
 	if err != nil {
 		return err
@@ -598,27 +623,8 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 			}
 		}
 	}
-	if err = c.Mail(sender); err != nil {
-		return err
-	}
-	for _, addr := range to {
-		if err = c.Rcpt(addr); err != nil {
-			return err
-		}
-	}
-	w, err := c.Data()
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(raw)
-	if err != nil {
-		return err
-	}
-	err = w.Close()
-	if err != nil {
-		return err
-	}
-	return c.Quit()
+
+	return e.sendHelper(c)
 }
 
 // SendWithStartTLS sends an email over TLS using STARTTLS with an optional TLS config.
@@ -626,29 +632,6 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 // The TLS Config is helpful if you need to connect to a host that is used an untrusted
 // certificate.
 func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error {
-	// Merge the To, Cc, and Bcc fields
-	to := make([]string, 0, len(e.To)+len(e.Cc)+len(e.Bcc))
-	to = append(append(append(to, e.To...), e.Cc...), e.Bcc...)
-	for i := 0; i < len(to); i++ {
-		addr, err := mail.ParseAddress(to[i])
-		if err != nil {
-			return err
-		}
-		to[i] = addr.Address
-	}
-	// Check to make sure there is at least one recipient and one "From" address
-	if e.From == "" || len(to) == 0 {
-		return errors.New("Must specify at least one From address and one To address")
-	}
-	sender, err := e.parseSender()
-	if err != nil {
-		return err
-	}
-	raw, err := e.Bytes()
-	if err != nil {
-		return err
-	}
-
 	// Taken from the standard library
 	// https://github.com/golang/go/blob/master/src/net/smtp/smtp.go#L328
 	c, err := smtp.Dial(addr)
@@ -673,27 +656,7 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 			}
 		}
 	}
-	if err = c.Mail(sender); err != nil {
-		return err
-	}
-	for _, addr := range to {
-		if err = c.Rcpt(addr); err != nil {
-			return err
-		}
-	}
-	w, err := c.Data()
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(raw)
-	if err != nil {
-		return err
-	}
-	err = w.Close()
-	if err != nil {
-		return err
-	}
-	return c.Quit()
+	return e.sendHelper(c)
 }
 
 // Attachment is a struct representing an email attachment.
