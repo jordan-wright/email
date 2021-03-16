@@ -165,8 +165,8 @@ func NewEmailFromReader(r io.Reader) (*Email, error) {
 			if err != nil {
 				return e, err
 			}
-			filename, filenameDefined := params["filename"]
-			if cd == "attachment" || (cd == "inline" && filenameDefined) {
+			filename, _ := params["filename"]
+			if cd == "attachment" || (cd == "inline" && p.header.Get("Content-ID") != "") {
 				_, err = e.AttachWithHeaders(bytes.NewReader(p.body), filename, ct, p.header)
 				if err != nil {
 					return e, err
@@ -721,11 +721,11 @@ func (at *Attachment) setDefaultHeaders() {
 	at.Header.Set("Content-Type", contentType)
 
 	if len(at.Header.Get("Content-Disposition")) == 0 {
-		disposition := "attachment"
 		if at.HTMLRelated {
-			disposition = "inline"
+			at.Header.Set("Content-Disposition", "inline")
+		}else{
+			at.Header.Set("Content-Disposition", fmt.Sprintf("%s;\r\n filename=\"%s\"", "attachment", at.Filename))
 		}
-		at.Header.Set("Content-Disposition", fmt.Sprintf("%s;\r\n filename=\"%s\"", disposition, at.Filename))
 	}
 	if len(at.Header.Get("Content-ID")) == 0 {
 		at.Header.Set("Content-ID", fmt.Sprintf("<%s>", at.Filename))
