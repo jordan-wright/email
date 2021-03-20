@@ -568,12 +568,7 @@ func (e *Email) parseSender() (string, error) {
 	}
 }
 
-func (e *Email) sendHelper(c *smtp.Client) error {
-	s, err := e.generateSMTPInfo()
-	if err != nil {
-		return err
-	}
-
+func (e *Email) sendHelper(c *smtp.Client, s *smtpInfo) error {
 	if err := c.Mail(s.sender); err != nil {
 		return err
 	}
@@ -602,6 +597,11 @@ func (e *Email) sendHelper(c *smtp.Client) error {
 // The TLS Config is helpful if you need to connect to a host that is used an untrusted
 // certificate.
 func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
+	s, err := e.generateSMTPInfo()
+	if err != nil {
+		return err
+	}
+
 	conn, err := tls.Dial("tcp", addr, t)
 	if err != nil {
 		return err
@@ -624,7 +624,7 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 		}
 	}
 
-	return e.sendHelper(c)
+	return e.sendHelper(c, s)
 }
 
 // SendWithStartTLS sends an email over TLS using STARTTLS with an optional TLS config.
@@ -632,6 +632,11 @@ func (e *Email) SendWithTLS(addr string, a smtp.Auth, t *tls.Config) error {
 // The TLS Config is helpful if you need to connect to a host that is used an untrusted
 // certificate.
 func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error {
+	s, err := e.generateSMTPInfo()
+	if err != nil {
+		return err
+	}
+
 	// Taken from the standard library
 	// https://github.com/golang/go/blob/master/src/net/smtp/smtp.go#L328
 	c, err := smtp.Dial(addr)
@@ -656,7 +661,7 @@ func (e *Email) SendWithStartTLS(addr string, a smtp.Auth, t *tls.Config) error 
 			}
 		}
 	}
-	return e.sendHelper(c)
+	return e.sendHelper(c, s)
 }
 
 // Attachment is a struct representing an email attachment.

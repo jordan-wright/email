@@ -284,11 +284,15 @@ func (p *Pool) Send(e *Email, timeout time.Duration) (err error) {
 		return p.failedToGet(start)
 	}
 
-	defer func() {
-		p.maybeReplace(err, c)
-	}()
+	var s *smtpInfo
+	s, err = e.generateSMTPInfo()
+	if err != nil {
+		return err
+	}
 
-	err = e.sendHelper(c.Client)
+	err = e.sendHelper(c.Client, s)
+	p.maybeReplace(err, c)
+
 	return
 }
 
