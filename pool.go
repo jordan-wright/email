@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"net/mail"
 	"net/smtp"
 	"net/textproto"
 	"sync"
@@ -285,73 +284,16 @@ func (p *Pool) Send(e *Email, timeout time.Duration) (err error) {
 		return p.failedToGet(start)
 	}
 
-	defer func() {
-		p.maybeReplace(err, c)
-	}()
-
-	recipients, err := addressLists(e.To, e.Cc, e.Bcc)
+	var s *smtpInfo
+	s, err = e.generateSMTPInfo()
 	if err != nil {
-		return
+		return err
 	}
 
-	msg, err := e.Bytes()
-	if err != nil {
-		return
-	}
-
-	from, err := emailOnly(e.From)
-	if err != nil {
-		return
-	}
-	if err = c.Mail(from); err != nil {
-		return
-	}
-
-	for _, recip := range recipients {
-		if err = c.Rcpt(recip); err != nil {
-			return
-		}
-	}
-
-	w, err := c.Data()
-	if err != nil {
-		return
-	}
-	if _, err = w.Write(msg); err != nil {
-		return
-	}
-
-	err = w.Close()
+	err = e.sendHelper(c.Client, s)
+	p.maybeReplace(err, c)
 
 	return
-}
-
-func emailOnly(full string) (string, error) {
-	addr, err := mail.ParseAddress(full)
-	if err != nil {
-		return "", err
-	}
-	return addr.Address, nil
-}
-
-func addressLists(lists ...[]string) ([]string, error) {
-	length := 0
-	for _, lst := range lists {
-		length += len(lst)
-	}
-	combined := make([]string, 0, length)
-
-	for _, lst := range lists {
-		for _, full := range lst {
-			addr, err := emailOnly(full)
-			if err != nil {
-				return nil, err
-			}
-			combined = append(combined, addr)
-		}
-	}
-
-	return combined, nil
 }
 
 // Close immediately changes the pool's state so no new connections will be
