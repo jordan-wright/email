@@ -230,19 +230,23 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 				}
 				ps = append(ps, sps...)
 			} else {
-				var reader io.Reader
-				reader = p
-				const cte = "Content-Transfer-Encoding"
-				if p.Header.Get(cte) == "base64" {
-					reader = base64.NewDecoder(base64.StdEncoding, reader)
+				var reader io.Reader = p
 
-					if strings.HasPrefix(subct, "text") && subps["charset"] != "" {
-						transReader, err := wordDecoder.CharsetReader(subps["charset"], reader)
-						if err == nil {
-							reader = transReader
-						}
+				const cte = "Content-Transfer-Encoding"
+				switch p.Header.Get(cte) {
+				case "quoted-printable":
+					reader = quotedprintable.NewReader(reader)
+				case "base64":
+					reader = base64.NewDecoder(base64.StdEncoding, reader)
+				}
+
+				if strings.HasPrefix(subct, "text") && subps["charset"] != "" {
+					transReader, err := wordDecoder.CharsetReader(subps["charset"], reader)
+					if err == nil {
+						reader = transReader
 					}
 				}
+
 				// Otherwise, just append the part to the list
 				// Copy the part data into the buffer
 				if _, err := io.Copy(&buf, reader); err != nil {
