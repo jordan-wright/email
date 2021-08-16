@@ -398,6 +398,11 @@ func TestHeaderEncoding(t *testing.T) {
 			want:  "=?utf-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, \"Only ASCII\" <foo@example.com>\r\n",
 		},
 		{
+			field: "Reply-To",
+			have:  "Needs Encóding <encoding@example.com>, Only ASCII <foo@example.com>",
+			want:  "=?utf-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, \"Only ASCII\" <foo@example.com>\r\n",
+		},
+		{
 			field: "To",
 			have:  "Keith Moore <moore@cs.utk.edu>, Keld Jørn Simonsen <keld@dkuug.dk>",
 			want:  "\"Keith Moore\" <moore@cs.utk.edu>, =?utf-8?q?Keld_J=C3=B8rn_Simonsen?= <keld@dkuug.dk>\r\n",
@@ -523,6 +528,7 @@ func TestNonAsciiEmailFromReader(t *testing.T) {
 	ex := &Email{
 		Subject: "Test Subject",
 		To:      []string{"Anaïs <anais@example.org>"},
+		ReplyTo: []string{"Anaïs <anais@example.org>"},
 		Cc:      []string{"Patrik Fältström <paf@example.com>"},
 		From:    "Mrs ValÃ©rie Dupont <valerie.dupont@example.com>",
 		Text:    []byte("This is a test message!"),
@@ -532,6 +538,7 @@ func TestNonAsciiEmailFromReader(t *testing.T) {
 Subject: =?UTF-8?Q?Test Subject?=
 From: Mrs =?ISO-8859-1?Q?Val=C3=A9rie=20Dupont?= <valerie.dupont@example.com>
 To: =?utf-8?q?Ana=C3=AFs?= <anais@example.org>
+Reply-To: =?utf-8?q?Ana=C3=AFs?= <anais@example.org>
 Cc: =?ISO-8859-1?Q?Patrik_F=E4ltstr=F6m?= <paf@example.com>
 Content-type: text/plain; charset=ISO-8859-1
 
@@ -548,6 +555,9 @@ This is a test message!`)
 	}
 	if e.To[0] != ex.To[0] {
 		t.Fatalf("Incorrect \"To\": %#q != %#q", e.To, ex.To)
+	}
+	if e.ReplyTo[0] != ex.ReplyTo[0] {
+		t.Fatalf("Incorrect \"Reply-To\": %#q != %#q", e.ReplyTo, ex.ReplyTo)
 	}
 	if e.Cc[0] != ex.Cc[0] {
 		t.Fatalf("Incorrect \"Cc\": %#q != %#q", e.Cc, ex.Cc)
