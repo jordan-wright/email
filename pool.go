@@ -8,7 +8,7 @@ import (
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -17,10 +17,9 @@ type Pool struct {
 	addr          string
 	auth          smtp.Auth
 	max           int
-	created       int
+	created       int32
 	clients       chan *client
 	rebuild       chan struct{}
-	mut           *sync.Mutex
 	lastBuildErr  *timestampedErr
 	closing       chan struct{}
 	tlsConfig     *tls.Config
@@ -52,7 +51,6 @@ func NewPool(address string, count int, auth smtp.Auth, opt_tlsConfig ...*tls.Co
 		clients: make(chan *client, count),
 		rebuild: make(chan struct{}),
 		closing: make(chan struct{}),
-		mut:     &sync.Mutex{},
 	}
 	if len(opt_tlsConfig) == 1 {
 		pool.tlsConfig = opt_tlsConfig[0]
@@ -84,7 +82,7 @@ func (p *Pool) get(timeout time.Duration) *client {
 	default:
 	}
 
-	if p.created < p.max {
+	if int(atomic.LoadInt32(&p.created)) < p.max {
 		p.makeOne()
 	}
 
@@ -142,24 +140,15 @@ func (p *Pool) replace(c *client) {
 }
 
 func (p *Pool) inc() bool {
-	if p.created >= p.max {
+	if int(atomic.LoadInt32(&p.created)) >= p.max {
 		return false
 	}
-
-	p.mut.Lock()
-	defer p.mut.Unlock()
-
-	if p.created >= p.max {
-		return false
-	}
-	p.created++
+	atomic.AddInt32(&p.created, 1)
 	return true
 }
 
 func (p *Pool) dec() {
-	p.mut.Lock()
-	p.created--
-	p.mut.Unlock()
+	atomic.AddInt32(&p.created, -1)
 
 	select {
 	case p.rebuild <- struct{}{}:
@@ -359,7 +348,7 @@ func addressLists(lists ...[]string) ([]string, error) {
 func (p *Pool) Close() {
 	close(p.closing)
 
-	for p.created > 0 {
+	for atomic.LoadInt32(&p.created) > 0 {
 		c := <-p.clients
 		c.Quit()
 		p.dec()
