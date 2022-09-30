@@ -51,6 +51,8 @@ type Email struct {
 	Headers     textproto.MIMEHeader
 	Attachments []*Attachment
 	ReadReceipt []string
+
+	InReplyTo string // add Reply Message-Id
 }
 
 // part is a copyable representation of a multipart.Part
@@ -326,6 +328,10 @@ func (e *Email) msgHeaders() (textproto.MIMEHeader, error) {
 			return nil, err
 		}
 		res.Set("Message-Id", id)
+	}
+	// add Reply Message-Id
+	if _, ok := res["In-Reply-To"]; !ok {
+		res.Set("In-Reply-To", e.InReplyTo)
 	}
 	// Date and From are required headers.
 	if _, ok := res["From"]; !ok {
