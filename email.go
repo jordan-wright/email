@@ -865,6 +865,16 @@ func (at *Attachment) setDefaultHeaders() {
 	}
 }
 
+func (at *Attachment) Stream(w io.Writer) error {
+	// TODO: here will be method for Attachment self-streaming with boundaries in base64
+	return nil
+}
+
+func base64stream(r io.Reader, w io.Writer) error {
+	// TODO: here will be method for base64 streaming of attachment self
+	return nil
+}
+
 // base64Wrap encodes the attachment content, and wraps it according to RFC 2045 standards (every 76 chars)
 // The output is then written to the specified io.Writer
 func base64Wrap(w io.Writer, b []byte) {
