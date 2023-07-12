@@ -379,6 +379,132 @@ func streamToBytes(r io.Reader) (b []byte, err error) {
 	return buffer.Bytes(), nil
 }
 
+func (e *Email) bytesNoAttachments() ([]byte, error) {
+	// TODO: better guess buffer size
+	buff := bytes.NewBuffer(make([]byte, 0, 4096))
+
+	headers, err := e.msgHeaders()
+	if err != nil {
+		return nil, err
+	}
+
+	htmlAttachments, otherAttachments := e.categorizeAttachments()
+	if len(e.HTML) == 0 && len(htmlAttachments) > 0 {
+		return nil, errors.New("there are HTML attachments, but no HTML body")
+	}
+
+	var (
+		isMixed       = len(otherAttachments) > 0
+		isAlternative = len(e.Text) > 0 && len(e.HTML) > 0
+		isRelated     = len(e.HTML) > 0 && len(htmlAttachments) > 0
+	)
+
+	var w *multipart.Writer
+	if isMixed || isAlternative || isRelated {
+		w = multipart.NewWriter(buff)
+	}
+	switch {
+	case isMixed:
+		headers.Set("Content-Type", "multipart/mixed;\r\n boundary="+w.Boundary())
+	case isAlternative:
+		headers.Set("Content-Type", "multipart/alternative;\r\n boundary="+w.Boundary())
+	case isRelated:
+		headers.Set("Content-Type", "multipart/related;\r\n boundary="+w.Boundary())
+	case len(e.HTML) > 0:
+		headers.Set("Content-Type", "text/html; charset=UTF-8")
+		headers.Set("Content-Transfer-Encoding", "quoted-printable")
+	default:
+		headers.Set("Content-Type", "text/plain; charset=UTF-8")
+		headers.Set("Content-Transfer-Encoding", "quoted-printable")
+	}
+	headerToBytes(buff, headers)
+	_, err = io.WriteString(buff, "\r\n")
+	if err != nil {
+		return nil, err
+	}
+
+	// Check to see if there is a Text or HTML field
+	if len(e.Text) > 0 || len(e.HTML) > 0 {
+		var subWriter *multipart.Writer
+
+		if isMixed && isAlternative {
+			// Create the multipart alternative part
+			subWriter = multipart.NewWriter(buff)
+			header := textproto.MIMEHeader{
+				"Content-Type": {"multipart/alternative;\r\n boundary=" + subWriter.Boundary()},
+			}
+			if _, err := w.CreatePart(header); err != nil {
+				return nil, err
+			}
+		} else {
+			subWriter = w
+		}
+		// Create the body sections
+		if len(e.Text) > 0 {
+			// Write the text
+			if err := writeMessage(buff, e.Text, isMixed || isAlternative, "text/plain", subWriter); err != nil {
+				return nil, err
+			}
+		}
+		if len(e.HTML) > 0 {
+			messageWriter := subWriter
+			var relatedWriter *multipart.Writer
+			if (isMixed || isAlternative) && len(htmlAttachments) > 0 {
+				relatedWriter = multipart.NewWriter(buff)
+				header := textproto.MIMEHeader{
+					"Content-Type": {"multipart/related;\r\n boundary=" + relatedWriter.Boundary()},
+				}
+				if _, err := subWriter.CreatePart(header); err != nil {
+					return nil, err
+				}
+
+				messageWriter = relatedWriter
+			} else if isRelated && len(htmlAttachments) > 0 {
+				relatedWriter = w
+				messageWriter = w
+			}
+			// Write the HTML
+			if err := writeMessage(buff, e.HTML, isMixed || isAlternative || isRelated, "text/html", messageWriter); err != nil {
+				return nil, err
+			}
+			if len(htmlAttachments) > 0 {
+				for _, a := range htmlAttachments {
+					a.setDefaultHeaders()
+					ap, err := relatedWriter.CreatePart(a.Header)
+					if err != nil {
+						return nil, err
+					}
+					// Write the base64Wrapped content to the part
+					var b []byte
+					if b, err = streamToBytes(a.Content); err != nil {
+						return nil, err
+					}
+					base64Wrap(ap, b)
+				}
+
+				if isMixed || isAlternative {
+					relatedWriter.Close()
+				}
+			}
+		}
+		if isMixed && isAlternative {
+			if err := subWriter.Close(); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	//originally attachments encoded to base 64 here and streamed to mime part writer
+	//now they will be streamed in other place
+
+	if isMixed || isAlternative || isRelated {
+		if err := w.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return buff.Bytes(), nil
+}
+
 func (e *Email) Bytes() ([]byte, error) {
 	// TODO: better guess buffer size
 	buff := bytes.NewBuffer(make([]byte, 0, 4096))
