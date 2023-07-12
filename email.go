@@ -262,15 +262,11 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 // Required parameters include an io.Reader, the desired filename for the attachment, and the Content-Type
 // The function will return the created Attachment for reference, as well as nil for the error, if successful.
 func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, err error) {
-	var buffer bytes.Buffer
-	if _, err = io.Copy(&buffer, r); err != nil {
-		return
-	}
 	at := &Attachment{
 		Filename:    filename,
 		ContentType: c,
 		Header:      textproto.MIMEHeader{},
-		Content:     buffer.Bytes(),
+		Content:     r,
 	}
 	e.Attachments = append(e.Attachments, at)
 	return at, nil
@@ -375,7 +371,14 @@ func (e *Email) categorizeAttachments() (htmlRelated, others []*Attachment) {
 	return
 }
 
-// Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
+func streamToBytes(r io.Reader) (b []byte, err error) {
+	var buffer bytes.Buffer
+	if _, err = io.Copy(&buffer, r); err != nil {
+		return
+	}
+	return buffer.Bytes(), nil
+}
+
 func (e *Email) Bytes() ([]byte, error) {
 	// TODO: better guess buffer size
 	buff := bytes.NewBuffer(make([]byte, 0, 4096))
@@ -472,7 +475,11 @@ func (e *Email) Bytes() ([]byte, error) {
 						return nil, err
 					}
 					// Write the base64Wrapped content to the part
-					base64Wrap(ap, a.Content)
+					var b []byte
+					if b, err = streamToBytes(a.Content); err != nil {
+						return nil, err
+					}
+					base64Wrap(ap, b)
 				}
 
 				if isMixed || isAlternative {
@@ -494,7 +501,11 @@ func (e *Email) Bytes() ([]byte, error) {
 			return nil, err
 		}
 		// Write the base64Wrapped content to the part
-		base64Wrap(ap, a.Content)
+		var b []byte
+		if b, err = streamToBytes(a.Content); err != nil {
+			return nil, err
+		}
+		base64Wrap(ap, b)
 	}
 	if isMixed || isAlternative || isRelated {
 		if err := w.Close(); err != nil {
@@ -702,7 +713,7 @@ type Attachment struct {
 	Filename    string
 	ContentType string
 	Header      textproto.MIMEHeader
-	Content     []byte
+	Content     io.Reader
 	HTMLRelated bool
 }
 
