@@ -774,7 +774,9 @@ func streamBase64Wrap(w io.Writer, r io.Reader) error {
 		}
 		//normal chunk processing. It's len=maxRaw exactly
 		base64.StdEncoding.Encode(wrBuffer, rdBuffer)
-		w.Write(wrBuffer)
+		if _, err := w.Write(wrBuffer); err != nil {
+			return err
+		}
 
 	}
 	//last chunk processing. It can be 0<=size<=maxRaw
@@ -782,7 +784,9 @@ func streamBase64Wrap(w io.Writer, r io.Reader) error {
 		out := wrBuffer[:base64.StdEncoding.EncodedLen(lastRead)]
 		base64.StdEncoding.Encode(out, rdBuffer[:lastRead])
 		out = append(out, "\r\n"...)
-		w.Write(out)
+		if _, err := w.Write(out); err != nil {
+			return err
+		}
 	}
 	return nil
 }
