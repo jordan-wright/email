@@ -759,7 +759,7 @@ func streamBase64Wrap(w io.Writer, r io.Reader) error {
 	// Buffer for each line, including trailing CRLF.
 	wrBuffer := make([]byte, MaxLineLength+len("\r\n"))
 	copy(wrBuffer[MaxLineLength:], "\r\n")
-	rdBuffer := make([]byte, maxRaw, maxRaw)
+	rdBuffer := make([]byte, maxRaw)
 	var lastRead int
 	var err error
 	cr := NewChunkedReader(r, maxRaw)
