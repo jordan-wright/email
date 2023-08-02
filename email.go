@@ -371,11 +371,6 @@ func (e *Email) categorizeAttachments() (htmlRelated, others []*Attachment) {
 	return
 }
 
-// streamToBytes is a helper for compatibility old and new logic
-func streamToBytes(r io.Reader) (b []byte, err error) {
-	return io.ReadAll(r)
-}
-
 // Bytes converts the Email object to a []byte representation, including all needed MIMEHeaders, boundaries, etc.
 func (e *Email) Bytes() ([]byte, error) {
 	// TODO: better guess buffer size
