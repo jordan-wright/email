@@ -262,15 +262,11 @@ func parseMIMEParts(hs textproto.MIMEHeader, b io.Reader) ([]*part, error) {
 // Required parameters include an io.Reader, the desired filename for the attachment, and the Content-Type
 // The function will return the created Attachment for reference, as well as nil for the error, if successful.
 func (e *Email) Attach(r io.Reader, filename string, c string) (a *Attachment, err error) {
-	var buffer bytes.Buffer
-	if _, err = io.Copy(&buffer, r); err != nil {
-		return
-	}
 	at := &Attachment{
 		Filename:    filename,
 		ContentType: c,
 		Header:      textproto.MIMEHeader{},
-		Content:     buffer.Bytes(),
+		Content:     r,
 	}
 	e.Attachments = append(e.Attachments, at)
 	return at, nil
@@ -472,7 +468,9 @@ func (e *Email) Bytes() ([]byte, error) {
 						return nil, err
 					}
 					// Write the base64Wrapped content to the part
-					base64Wrap(ap, a.Content)
+					if err = streamBase64Wrap(ap, a.Content); err != nil {
+						return nil, err
+					}
 				}
 
 				if isMixed || isAlternative {
@@ -494,7 +492,9 @@ func (e *Email) Bytes() ([]byte, error) {
 			return nil, err
 		}
 		// Write the base64Wrapped content to the part
-		base64Wrap(ap, a.Content)
+		if err = streamBase64Wrap(ap, a.Content); err != nil {
+			return nil, err
+		}
 	}
 	if isMixed || isAlternative || isRelated {
 		if err := w.Close(); err != nil {
@@ -702,7 +702,7 @@ type Attachment struct {
 	Filename    string
 	ContentType string
 	Header      textproto.MIMEHeader
-	Content     []byte
+	Content     io.Reader
 	HTMLRelated bool
 }
 
@@ -749,6 +749,46 @@ func base64Wrap(w io.Writer, b []byte) {
 		out = append(out, "\r\n"...)
 		w.Write(out)
 	}
+}
+
+// streamBase64Wrap encodes the attachment content, provided as stream, and wraps it according to RFC 2045 standards (every 76 chars)
+// The output is then written to the specified io.Writer
+func streamBase64Wrap(w io.Writer, r io.Reader) error {
+	// 57 raw bytes per 76-byte base64 line.
+	const maxRaw = 57
+	// Buffer for each line, including trailing CRLF.
+	wrBuffer := make([]byte, MaxLineLength+len("\r\n"))
+	copy(wrBuffer[MaxLineLength:], "\r\n")
+	rdBuffer := make([]byte, maxRaw)
+	var lastRead int
+	var err error
+	cr := NewChunkedReader(r, maxRaw)
+	for {
+		//Reading next 57-bytes chunk.
+		if lastRead, err = cr.Read(rdBuffer); err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		//In case of last chunk jump to last chunk processing
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		//normal chunk processing. It's len=maxRaw exactly
+		base64.StdEncoding.Encode(wrBuffer, rdBuffer)
+		if _, err := w.Write(wrBuffer); err != nil {
+			return err
+		}
+
+	}
+	//last chunk processing. It can be 0<=size<=maxRaw
+	if lastRead > 0 {
+		out := wrBuffer[:base64.StdEncoding.EncodedLen(lastRead)]
+		base64.StdEncoding.Encode(out, rdBuffer[:lastRead])
+		out = append(out, "\r\n"...)
+		if _, err := w.Write(out); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // headerToBytes renders "header" to "buff". If there are multiple values for a
