@@ -717,13 +717,19 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	if e.Attachments[0].Filename != a.Filename {
 		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[0].Filename, a.Filename)
 	}
-	if !bytes.Equal(e.Attachments[0].Content, a.Content) {
+	var b1, b2 []byte
+	b1, _ = io.ReadAll(e.Attachments[0].Content)
+	b2, _ = io.ReadAll(a.Content)
+	if !bytes.Equal(b1, b2) {
 		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[0].Content, a.Content)
 	}
 	if e.Attachments[1].Filename != b.Filename {
 		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[1].Filename, b.Filename)
 	}
-	if !bytes.Equal(e.Attachments[1].Content, b.Content) {
+	var b3, b4 []byte
+	b3, _ = io.ReadAll(e.Attachments[1].Content)
+	b4, _ = io.ReadAll(b.Content)
+	if !bytes.Equal(b3, b4) {
 		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[1].Content, b.Content)
 	}
 }
