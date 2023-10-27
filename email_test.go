@@ -2,12 +2,14 @@ package email
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"testing"
 
 	"bufio"
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -729,15 +731,51 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 }
 
 func ExampleGmail() {
+	gmUser := "test@gmail.com"
+	gmPass := "<password>"
+	gmHost := "smtp.gmail.com"
+	gmPort := "587"
+
 	e := NewEmail()
-	e.From = "Jordan Wright <test@gmail.com>"
+	e.From = "Jordan Wright <" + gmUser + ">"
 	e.To = []string{"test@example.com"}
 	e.Bcc = []string{"test_bcc@example.com"}
 	e.Cc = []string{"test_cc@example.com"}
 	e.Subject = "Awesome Subject"
 	e.Text = []byte("Text Body is, of course, supported!\n")
 	e.HTML = []byte("<h1>Fancy Html is supported, too!</h1>\n")
-	e.Send("smtp.gmail.com:587", smtp.PlainAuth("", e.From, "password123", "smtp.gmail.com"))
+	e.LocalName = "localhost"
+	err := e.Send(
+		gmHost+":"+gmPort,
+		smtp.PlainAuth("", gmUser, gmPass, gmHost),
+	)
+	if err != nil {
+		log.Fatalf("Failed to send gmail mail: %v", err)
+	}
+}
+
+func ExampleGmailWithTLS() {
+	gmUser := "test@gmail.com"
+	gmPass := "<password>"
+	gmHost := "smtp.gmail.com"
+	gmPort := "465"
+
+	e := NewEmail()
+	e.From = "Jordan Wright <" + gmUser + ">"
+	e.To = []string{"test@example.com"}
+	e.Bcc = []string{"test_bcc@example.com"}
+	e.Cc = []string{"test_cc@example.com"}
+	e.Subject = "Awesome Subject"
+	e.Text = []byte("Text Body is, of course, supported!\n")
+	e.HTML = []byte("<h1>Fancy Html is supported, too!</h1>\n")
+	e.LocalName = "localhost"
+	err := e.SendWithTLS(
+		gmHost+":"+gmPort,
+		smtp.PlainAuth("", gmUser, gmPass, gmHost),
+		&tls.Config{ServerName: gmHost})
+	if err != nil {
+		log.Fatalf("Failed to send gmail mail: %v", err)
+	}
 }
 
 func ExampleAttach() {
