@@ -931,3 +931,24 @@ func TestParseSender(t *testing.T) {
 		}
 	}
 }
+
+func TestSendEmail(t *testing.T) {
+	input := &Email{
+		From:    "example_from@gmail.com",
+		To:      []string{"example_to@gmail.com"},
+		Subject: "Test Subject",
+		Text:    []byte("This is a test email with HTML Formatting. It also has very long lines so\nthat the content must be wrapped if using quoted-printable decoding.\n"),
+		HTML:    []byte("<div dir=\"ltr\">This is a test email with <b>HTML Formatting.</b>\u00a0It also has very long lines so that the content must be wrapped if using quoted-printable decoding.</div>\n"),
+	}
+
+	err := input.Send("smtp.gmail.com:587", smtp.PlainAuth("", input.From, "password123", "smtp.gmail.com"))
+	if err == nil {
+		t.Fatalf("Error expected when sending email")
+	}
+
+	err = input.Send("smtp.gmail.com:587", smtp.PlainAuth("", input.From, "password123", "smtp.gmail.com"))
+	if err == nil {
+		t.Fatalf("Error expected when sending email")
+	}
+
+}
