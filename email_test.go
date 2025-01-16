@@ -85,6 +85,12 @@ func TestEmailWithHTMLAttachments(t *testing.T) {
 	}
 	attachment.HTMLRelated = true
 
+	// Set regular HTML attachment.
+	_, err = e.Attach(bytes.NewBufferString("Normal attachment"), "normal.pdf", "application/pdf; charset=utf-8")
+	if err != nil {
+		t.Fatal("Could not add an attachment to the message: ", err)
+	}
+
 	b, err := e.Bytes()
 	if err != nil {
 		t.Fatal("Could not serialize e-mail:", err)
@@ -110,14 +116,17 @@ func TestEmailWithHTMLAttachments(t *testing.T) {
 	plainTextFound := false
 	htmlFound := false
 	imageFound := false
-	if expected, actual := 3, len(ps); actual != expected {
+	if expected, actual := 4, len(ps); actual != expected {
 		t.Error("Unexpected number of parts. Expected:", expected, "Was:", actual)
 	}
 	for _, part := range ps {
 		// part has "header" and "body []byte"
 		cd := part.header.Get("Content-Disposition")
 		ct := part.header.Get("Content-Type")
-		if strings.Contains(ct, "image/png") && strings.HasPrefix(cd, "inline") {
+		if strings.Contains(ct, "image/png") && strings.HasPrefix(cd, "inline") && !strings.Contains(cd, "rad.txt"){
+			imageFound = true
+		}
+		if strings.Contains(ct, "application/pdf") && strings.HasPrefix(cd, "attachment") && strings.Contains(cd, "normal.pdf"){
 			imageFound = true
 		}
 		if strings.Contains(ct, "text/html") {
@@ -398,6 +407,11 @@ func TestHeaderEncoding(t *testing.T) {
 			want:  "=?utf-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, \"Only ASCII\" <foo@example.com>\r\n",
 		},
 		{
+			field: "Reply-To",
+			have:  "Needs Encóding <encoding@example.com>, Only ASCII <foo@example.com>",
+			want:  "=?utf-8?q?Needs_Enc=C3=B3ding?= <encoding@example.com>, \"Only ASCII\" <foo@example.com>\r\n",
+		},
+		{
 			field: "To",
 			have:  "Keith Moore <moore@cs.utk.edu>, Keld Jørn Simonsen <keld@dkuug.dk>",
 			want:  "\"Keith Moore\" <moore@cs.utk.edu>, =?utf-8?q?Keld_J=C3=B8rn_Simonsen?= <keld@dkuug.dk>\r\n",
@@ -523,6 +537,7 @@ func TestNonAsciiEmailFromReader(t *testing.T) {
 	ex := &Email{
 		Subject: "Test Subject",
 		To:      []string{"Anaïs <anais@example.org>"},
+		ReplyTo: []string{"Anaïs <anais@example.org>"},
 		Cc:      []string{"Patrik Fältström <paf@example.com>"},
 		From:    "Mrs ValÃ©rie Dupont <valerie.dupont@example.com>",
 		Text:    []byte("This is a test message!"),
@@ -532,6 +547,7 @@ func TestNonAsciiEmailFromReader(t *testing.T) {
 Subject: =?UTF-8?Q?Test Subject?=
 From: Mrs =?ISO-8859-1?Q?Val=C3=A9rie=20Dupont?= <valerie.dupont@example.com>
 To: =?utf-8?q?Ana=C3=AFs?= <anais@example.org>
+Reply-To: =?utf-8?q?Ana=C3=AFs?= <anais@example.org>
 Cc: =?ISO-8859-1?Q?Patrik_F=E4ltstr=F6m?= <paf@example.com>
 Content-type: text/plain; charset=ISO-8859-1
 
@@ -548,6 +564,9 @@ This is a test message!`)
 	}
 	if e.To[0] != ex.To[0] {
 		t.Fatalf("Incorrect \"To\": %#q != %#q", e.To, ex.To)
+	}
+	if e.ReplyTo[0] != ex.ReplyTo[0] {
+		t.Fatalf("Incorrect \"Reply-To\": %#q != %#q", e.ReplyTo, ex.ReplyTo)
 	}
 	if e.Cc[0] != ex.Cc[0] {
 		t.Fatalf("Incorrect \"Cc\": %#q != %#q", e.Cc, ex.Cc)
@@ -650,6 +669,11 @@ func TestAttachmentEmailFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error attaching inline image %s", err.Error())
 	}
+	c, err := ex.Attach(bytes.NewReader([]byte("Let's just pretend this is raw JPEG data.")), "html-related-cat.jpeg", "image/jpeg")
+	if err != nil {
+		t.Fatalf("Error attaching html-related inline image %s", err.Error())
+	}
+	b.HTMLRelated = true
 	raw := []byte(`
 From: Jordan Wright <jmwright798@gmail.com>
 Date: Thu, 17 Oct 2019 08:55:37 +0100
@@ -679,7 +703,7 @@ Content-Type: text/html; charset=UTF-8
 --35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
 Content-Disposition: attachment;
  filename="cat.jpeg"
-Content-Id: <cat.jpeg>
+Content-Id: <cat.content-id>
 Content-Transfer-Encoding: base64
 Content-Type: image/jpeg
 
@@ -688,7 +712,15 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 --35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
 Content-Disposition: inline;
  filename="cat-inline.jpeg"
-Content-Id: <cat-inline.jpeg>
+Content-Id: <cat-inline.content-id>
+Content-Transfer-Encoding: base64
+Content-Type: image/jpeg
+
+TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
+
+--35d10c2224bd787fe700c2c6f4769ddc936eb8a0b58e9c8717e406c5abb7
+Content-Disposition: inline
+Content-Id: <html-related-cat.content-id>
 Content-Transfer-Encoding: base64
 Content-Type: image/jpeg
 
@@ -711,8 +743,8 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	if e.From != ex.From {
 		t.Fatalf("Incorrect \"From\": %#q != %#q", e.From, ex.From)
 	}
-	if len(e.Attachments) != 2 {
-		t.Fatalf("Incorrect number of attachments %d != %d", len(e.Attachments), 1)
+	if len(e.Attachments) != 3 {
+		t.Fatalf("Incorrect number of attachments %d != %d", len(e.Attachments), 3)
 	}
 	if e.Attachments[0].Filename != a.Filename {
 		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[0].Filename, a.Filename)
@@ -720,11 +752,33 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	if !bytes.Equal(e.Attachments[0].Content, a.Content) {
 		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[0].Content, a.Content)
 	}
+	if e.Attachments[0].Header != nil {
+		if e.Attachments[0].Header.Get("Content-Id") != "<cat.content-id>" {
+			t.Fatalf("Incorrect attachment header Content-Id %s != %s", e.Attachments[0].Header.Get("Content-Id"), "<cat.content-id>")
+		}
+	}
 	if e.Attachments[1].Filename != b.Filename {
 		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[1].Filename, b.Filename)
 	}
 	if !bytes.Equal(e.Attachments[1].Content, b.Content) {
 		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[1].Content, b.Content)
+	}
+	if e.Attachments[1].Header != nil {
+		if e.Attachments[1].Header.Get("Content-Id") != "<cat-inline.content-id>" {
+			t.Fatalf("Incorrect attachment header Content-Id %s != %s", e.Attachments[1].Header.Get("Content-Id"), "<cat-inline.content-id>")
+		}
+	}
+	//Filename should be empty as we are using html-related and inline attachment
+	if e.Attachments[2].Filename != "" {
+		t.Fatalf("Incorrect attachment filename %s != %s", e.Attachments[2].Filename, "")
+	}
+	if !bytes.Equal(e.Attachments[2].Content, c.Content) {
+		t.Fatalf("Incorrect attachment content %#q != %#q", e.Attachments[2].Content, c.Content)
+	}
+	if e.Attachments[2].Header != nil {
+		if e.Attachments[2].Header.Get("Content-Id") != "<html-related-cat.content-id>" {
+			t.Fatalf("Incorrect attachment header Content-Id %s != %s", e.Attachments[2].Header.Get("Content-Id"), "<html-related-cat.content-id>")
+		}
 	}
 }
 

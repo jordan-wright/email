@@ -11,6 +11,8 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    env:
+      GO111MODULE: auto
     steps:
 
     - name: Set up Go 1.x
