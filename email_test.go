@@ -554,6 +554,20 @@ This is a test message!`)
 	}
 }
 
+func TestAddressListCommaInsideName(t *testing.T) {
+	raw := []byte("From: a@b.com\r\nTo: \"Doe, John\" <john@example.com>, Jane <jane@example.com>\r\nCc: (Doe, John) <john@example.com>\r\nSubject: hi\r\nContent-Type: text/plain\r\n\r\nhello\r\n")
+	e, err := NewEmailFromReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.To) != 2 || e.To[0] != `"Doe, John" <john@example.com>` || e.To[1] != "Jane <jane@example.com>" {
+		t.Fatalf("To: got %#v", e.To)
+	}
+	if len(e.Cc) != 1 || e.Cc[0] != "(Doe, John) <john@example.com>" {
+		t.Fatalf("Cc: got %#v", e.Cc)
+	}
+}
+
 func TestNonMultipartEmailFromReader(t *testing.T) {
 	ex := &Email{
 		Text:    []byte("This is a test message!"),
@@ -728,7 +742,7 @@ TGV0J3MganVzdCBwcmV0ZW5kIHRoaXMgaXMgcmF3IEpQRUcgZGF0YS4=
 	}
 }
 
-func ExampleGmail() {
+func Example_gmail() {
 	e := NewEmail()
 	e.From = "Jordan Wright <test@gmail.com>"
 	e.To = []string{"test@example.com"}
@@ -740,7 +754,7 @@ func ExampleGmail() {
 	e.Send("smtp.gmail.com:587", smtp.PlainAuth("", e.From, "password123", "smtp.gmail.com"))
 }
 
-func ExampleAttach() {
+func Example_attach() {
 	e := NewEmail()
 	e.AttachFile("test.txt")
 }

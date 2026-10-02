@@ -85,10 +85,49 @@ func (tr *trimReader) Read(buf []byte) (int, error) {
 	return n, err
 }
 
+// splitAddressList splits on commas that separate addresses. A comma inside a
+// quoted string or a comment is part of that address.
+func splitAddressList(s string) []string {
+	var parts []string
+	var b strings.Builder
+	var quote, escape bool
+	var paren int
+	for _, r := range s {
+		if escape {
+			b.WriteRune(r)
+			escape = false
+			continue
+		}
+		if quote && r == '\\' {
+			b.WriteRune(r)
+			escape = true
+			continue
+		}
+		if r == '"' {
+			quote = !quote
+			b.WriteRune(r)
+			continue
+		}
+		if !quote && r == '(' {
+			paren++
+		} else if !quote && r == ')' && paren > 0 {
+			paren--
+		}
+		if r == ',' && !quote && paren == 0 {
+			parts = append(parts, b.String())
+			b.Reset()
+			continue
+		}
+		b.WriteRune(r)
+	}
+	parts = append(parts, b.String())
+	return parts
+}
+
 func handleAddressList(v []string) []string {
 	res := []string{}
 	for _, a := range v {
-		w := strings.Split(a, ",")
+		w := splitAddressList(a)
 		for _, addr := range w {
 			decodedAddr, err := (&mime.WordDecoder{}).DecodeHeader(strings.TrimSpace(addr))
 			if err == nil {
