@@ -931,3 +931,87 @@ func TestParseSender(t *testing.T) {
 		}
 	}
 }
+
+func TestAttachmentFilenameEncoding(t *testing.T) {
+	filenames := []string{
+		"plain.txt",
+		"non-ascii øæä.txt",
+		"报告.txt",
+		`a"quoted"name.txt`,
+		`a\backslash.txt`,
+	}
+	for _, filename := range filenames {
+		e := prepareEmail()
+		content := []byte("attachment content")
+		if _, err := e.Attach(bytes.NewReader(content), filename, "text/plain"); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := e.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg, err := mail.ReadMessage(bytes.NewReader(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		part, err := multipart.NewReader(msg.Body, params["boundary"]).NextPart()
+		if err != nil {
+			t.Fatal(err)
+		}
+		disposition := part.Header.Get("Content-Disposition")
+		// MIME parameters must be encoded rather than containing raw non-ASCII bytes.
+		for _, b := range []byte(disposition) {
+			if b > 127 {
+				t.Errorf("filename %q: non-ASCII Content-Disposition %q", filename, disposition)
+				break
+			}
+		}
+		mediaType, params, err := mime.ParseMediaType(disposition)
+		if err != nil {
+			t.Errorf("filename %q: invalid Content-Disposition: %v", filename, err)
+			continue
+		}
+		if mediaType != "attachment" || params["filename"] != filename {
+			t.Errorf("filename %q: got disposition %q with filename %q", filename, mediaType, params["filename"])
+		}
+		parsed, err := NewEmailFromReader(bytes.NewReader(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(parsed.Attachments) != 1 {
+			t.Fatalf("filename %q: got %d attachments", filename, len(parsed.Attachments))
+		}
+		if parsed.Attachments[0].Filename != filename || !bytes.Equal(parsed.Attachments[0].Content, content) {
+			t.Errorf("filename %q: attachment changed after round trip: %#v", filename, parsed.Attachments[0])
+		}
+	}
+}
+
+func TestAttachmentDispositionDefaults(t *testing.T) {
+	for _, inline := range []bool{false, true} {
+		attachment := &Attachment{
+			Filename:    "non-ascii øæä.txt",
+			HTMLRelated: inline,
+			Header:      make(textproto.MIMEHeader),
+		}
+		attachment.setDefaultHeaders()
+		disposition, params, err := mime.ParseMediaType(attachment.Header.Get("Content-Disposition"))
+		expected := "attachment"
+		if inline {
+			expected = "inline"
+		}
+		if err != nil || disposition != expected || params["filename"] != attachment.Filename {
+			t.Errorf("inline %t: unexpected disposition: %q (%v)", inline, attachment.Header.Get("Content-Disposition"), err)
+		}
+		custom := "inline; filename=custom.txt"
+		attachment.Header.Set("Content-Disposition", custom)
+		attachment.setDefaultHeaders()
+		if got := attachment.Header.Get("Content-Disposition"); got != custom {
+			t.Errorf("custom Content-Disposition changed to %q", got)
+		}
+	}
+}

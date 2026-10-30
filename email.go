@@ -718,7 +718,7 @@ func (at *Attachment) setDefaultHeaders() {
 		if at.HTMLRelated {
 			disposition = "inline"
 		}
-		at.Header.Set("Content-Disposition", fmt.Sprintf("%s;\r\n filename=\"%s\"", disposition, at.Filename))
+		at.Header.Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": at.Filename}))
 	}
 	if len(at.Header.Get("Content-ID")) == 0 {
 		at.Header.Set("Content-ID", fmt.Sprintf("<%s>", at.Filename))
